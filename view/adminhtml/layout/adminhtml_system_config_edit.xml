@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<layout xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:framework/View/Layout/etc/page_configuration.xsd">
+
+    <update handle="adminhtml_system_config_edit"/>
+
+    <referenceBlock name="head">
+        <block class="Magento\Backend\Block\Template" name="fastmagento_admin_head" template="ParkkTech_FastMagento::admin/head.phtml"/>
+    </referenceBlock>
+
+</layout>

@@ -1,0 +1,24 @@
+<?php
+/** @var \ParkkTech\FastMagento\Block\Category\View $block */
+$products = $block->getCategoryProducts();
+?>
+
+<div class="category-products">
+    <h1><?= __('Category Products') ?></h1>
+
+    <?php if (count($products) > 0): ?>
+        <div class="products-grid">
+            <?php foreach ($products as $product): ?>
+                <div class="product-item">
+                    <a href="<?= $block->getUrl($product['url_key']) ?>">
+                        <img src="<?= $product['image'] ?>" alt="<?= $product['name'] ?>">
+                        <h2><?= $product['name'] ?></h2>
+                        <span class="price"><?= $product['final_price'] ?></span>
+                    </a>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    <?php else: ?>
+        <p><?= __('No products found in this category.') ?></p>
+    <?php endif; ?>
+</div>

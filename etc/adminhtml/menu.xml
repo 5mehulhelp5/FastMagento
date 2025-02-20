@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:framework/Menu/etc/menu.xsd">
+
+    <menu>
+        <add id="ParkkTech_FastMagento::main_menu"
+             title="FastMagento"
+             module="ParkkTech_FastMagento"
+             sortOrder="10"
+             resource="ParkkTech_FastMagento::config"/>
+
+        <add id="ParkkTech_FastMagento::config"
+             title="Search and Indexing Settings"
+             module="ParkkTech_FastMagento"
+             parent="ParkkTech_FastMagento::main_menu"
+             sortOrder="20"
+             action="adminhtml/system_config/edit/section/fastmagento"
+             resource="ParkkTech_FastMagento::config"/>
+    </menu>
+</config>

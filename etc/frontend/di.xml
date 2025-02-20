@@ -1,0 +1,137 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/config.xsd">
+
+    <!--
+       FRONTEND SCOPE:
+       - We only want to override \Magento\Catalog\Model\Product with our Shell plugin
+         on the front end (not in admin).
+       - We also override the front-end product view controller.
+    -->
+
+
+
+    <!-- ✅ Ensure backend/indexer uses MySQL resource collection -->
+<!--    <preference for="Magento\Catalog\Model\ResourceModel\Product\Collection"
+                    type="ParkkTech\FastMagento\Model\ResourceModel\Product\IndexerProductCollection">
+        <scope>frontend</scope>
+    </preference>-->
+
+    <!-- ✅ Plugin: Use OpenSearch Collection for Product Listings (PLP, Search, etc.) -->
+    <type name="Magento\Catalog\Model\ResourceModel\Product\CollectionFactory">
+        <plugin name="frontend_product_collection_plugin"
+                type="ParkkTech\FastMagento\Plugin\FrontendProductCollectionPlugin"
+                sortOrder="10"/>
+    </type>
+
+    <!-- ✅ Plugin: Use OpenSearch for Individual Product Retrieval (PDP, Cart, Checkout) -->
+    <type name="Magento\Catalog\Model\Product">
+        <plugin name="frontend_product_plugin"
+                type="ParkkTech\FastMagento\Plugin\FrontendProductPlugin"
+                sortOrder="10"/>
+    </type>
+
+    <!-- ✅ Override TierPrice Only on Frontend -->
+    <preference for="Magento\Catalog\Pricing\Price\TierPrice"
+                type="ParkkTech\FastMagento\Pricing\Price\TierPrice">
+    </preference>
+
+    <!-- ✅ Override CatalogRulePrice Only on Frontend -->
+    <preference for="Magento\CatalogRule\Pricing\Price\CatalogRulePrice"
+                type="ParkkTech\FastMagento\Pricing\Price\CatalogRulePrice">
+    </preference>
+
+    <!-- ✅ Override Configurable::getParentIdsByChild() Only on Frontend -->
+    <preference for="Magento\ConfigurableProduct\Model\ResourceModel\Product\Type\Configurable"
+                type="ParkkTech\FastMagento\Model\Configurable\ConfigurableProductType">
+    </preference>
+
+    <!-- ✅ Override Magento’s Configurable Product Type -->
+    <preference for="Magento\ConfigurableProduct\Model\Product\Type\Configurable"
+                type="ParkkTech\FastMagento\Model\Product\Type\Configurable" />
+
+    <!-- ✅ Use OpenSearch for StockRegistry on the frontend -->
+  <preference for="Magento\CatalogInventory\Api\StockRegistryInterface"
+                type="ParkkTech\FastMagento\Model\OpenSearchStockRegistry">
+    </preference>
+
+
+
+    <!-- ✅ Plugin: Use ShellProduct ONLY on the frontend -->
+<!--    <type name="Magento\Catalog\Model\Product">
+        <plugin name="shell_product_override"
+                type="ParkkTech\FastMagento\Plugin\ShellProductPlugin"
+                sortOrder="10"/>
+    </type>-->
+
+    <!-- ✅ Override Magento's front-end Product View Controller -->
+<!--
+    <preference for="Magento\Catalog\Controller\Product\View"
+                type="ParkkTech\FastMagento\Controller\Product\View" />
+-->
+
+
+    <!-- ✅ Define ShellProduct for global usage
+     (the front-end plugin references this class).
+     The 'data' argument is an example.
+-->
+<!--
+    <type name="ParkkTech\FastMagento\Model\ShellProduct\ShellProduct">
+        <arguments>
+            <argument name="data" xsi:type="array">{}</argument>
+        </arguments>
+    </type>
+-->
+
+    <!-- ✅ ShellNoEavProduct (global) -->
+<!--    <type name="ParkkTech\FastMagento\Model\ShellProduct\ShellNoEavProduct" />-->
+
+    <!-- ✅ ShellProductBuilder with correct dependencies -->
+<!--
+    <type name="ParkkTech\FastMagento\Helper\ShellProductBuilder">
+        <arguments>
+            <argument name="shellPriceFactory" xsi:type="object">
+                ParkkTech\FastMagento\Model\ShellProduct\ShellPriceFactory
+            </argument>
+            <argument name="shellDataProductFactory" xsi:type="object">
+                ParkkTech\FastMagento\Model\ShellProduct\ShellDataProductFactory
+            </argument>
+        </arguments>
+    </type>
+-->
+
+    <!-- ✅ ShellPrice definition with msrp objects -->
+<!--    <type name="ParkkTech\FastMagento\Model\ShellProduct\ShellPrice">
+        <arguments>
+            <argument name="msrpConfig" xsi:type="object">Magento\Msrp\Model\Config</argument>
+            <argument name="msrp" xsi:type="object">Magento\Msrp\Model\Msrp</argument>
+            <argument name="productOptions" xsi:type="null"/>
+        </arguments>
+    </type>-->
+
+    <!-- ✅ ShellDataProduct -->
+<!--    <type name="ParkkTech\FastMagento\Model\ShellProduct\ShellDataProduct">
+        <arguments>
+            <argument name="urlModel" xsi:type="object">Magento\Catalog\Model\Product\Url</argument>
+        </arguments>
+    </type>-->
+
+    <!--
+      GLOBAL SCOPE:
+      - Virtual types for your shell product
+      - Indexer registry
+      - Default definitions for ShellProduct, ShellPrice, etc.
+      - ShellProductBuilder, etc.
+   -->
+
+    <!-- ✅ Virtual type for shell product (global) -->
+<!--    <virtualType name="ParkkTech\FastMagento\Model\ShellProduct\VirtualShellProduct"
+                 type="ParkkTech\FastMagento\Model\ShellProduct\ShellProduct">
+        <arguments>
+            <argument name="categoryCollectionFactory" xsi:type="object">
+                Magento\Catalog\Model\ResourceModel\Category\CollectionFactory
+            </argument>
+        </arguments>
+    </virtualType>-->
+
+</config>

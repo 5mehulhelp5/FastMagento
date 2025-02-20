@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<page xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:noNamespaceSchemaLocation="urn:magento:framework/View/Layout/etc/page_configuration.xsd">
+    <body>
+        <referenceContainer name="content">
+            <!-- Remove default Magento search results block -->
+            <referenceBlock name="search.result" remove="true"/>
+
+            <!-- Add OpenSearch-based search results -->
+            <block class="ParkkTech\FastMagento\Block\Search\Results"
+                   name="fastmagento.search.results"
+                   template="ParkkTech_FastMagento::search/results.phtml"/>
+        </referenceContainer>
+    </body>
+</page>
