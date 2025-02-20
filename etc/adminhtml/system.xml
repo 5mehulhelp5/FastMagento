@@ -1,0 +1,48 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:framework/Config/etc/system_file.xsd">
+
+    <system>
+        <!-- Define Tab -->
+        <tab id="fastmagento" translate="label">
+            <label>FastMagento</label>
+        </tab>
+
+        <!-- FastMagento Section -->
+        <section id="fastmagento" translate="label" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="1">
+            <label>FastMagento Settings</label>
+            <tab>fastmagento</tab>
+            <resource>ParkkTech_FastMagento::config</resource>
+
+            <!-- Indexing Configuration -->
+            <group id="indexing" translate="label" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="1">
+                <label>Indexing Configuration</label>
+
+                <field id="enable_realtime_indexing" translate="label" type="select" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Enable Real-Time Indexing</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                </field>
+
+                <field id="enable_cron_indexing" translate="label" type="select" sortOrder="20" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Enable Cron-Based Indexing</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                </field>
+
+                <!-- ✅ New Setting: OpenSearch Index Prefix -->
+                <field id="opensearch_index_prefix" translate="label" type="text" sortOrder="30" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>OpenSearch Index Prefix</label>
+                    <comment>Define the prefix for OpenSearch index. Default is "products".</comment>
+                </field>
+            </group>
+
+            <!-- Cache Optimization -->
+            <group id="cache" translate="label" sortOrder="30" showInDefault="1" showInWebsite="1" showInStore="1">
+                <label>Cache Optimization</label>
+
+                <field id="popular_searches" translate="label" type="textarea" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Popular Search Terms (Comma-Separated)</label>
+                </field>
+            </group>
+        </section>
+    </system>
+</config>

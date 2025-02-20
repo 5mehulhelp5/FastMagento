@@ -1,0 +1,52 @@
+<?php
+/** @var $block \ParkkTech\FastMagento\Block\Product\View */
+$doc = $block->getOsDoc();
+if (!$doc) {
+    echo '<h1>Product Not Found in OpenSearch</h1>';
+    return;
+}
+
+/**
+ * A small helper function so we never pass an array to escapeHtml().
+ * If $val is array, we'll use json_encode() for display.
+ */
+function safeEscape($block, $val): string {
+    if (is_array($val)) {
+        // Convert array to JSON or comma-separated, whichever you prefer
+        $val = json_encode($val);
+    }
+    return $block->escapeHtml($val);
+}
+?>
+<h1><?= safeEscape($block, $doc['name'] ?? 'Unknown Product') ?></h1>
+
+<p><strong>SKU:</strong> <?= safeEscape($block, $doc['sku'] ?? '') ?></p>
+
+<!-- If doc['price'] is an array or object, we display a fallback or JSON -->
+<?php $priceVal = $doc['price'] ?? '0.00'; ?>
+<p><strong>Price:</strong> <?= safeEscape($block, $priceVal) ?></p>
+
+<?php if (!empty($doc['custom_attributes'])): ?>
+    <h2>Custom Attributes:</h2>
+    <ul>
+        <?php foreach ($doc['custom_attributes'] as $attrCode => $attrValue): ?>
+            <li>
+                <strong><?= $block->escapeHtml($attrCode) ?></strong>:
+                <?= safeEscape($block, $attrValue) ?>
+            </li>
+        <?php endforeach; ?>
+    </ul>
+<?php endif; ?>
+
+<!-- If you have child products or scene7 data, you can parse them as well -->
+<?php if (!empty($doc['child_products'])): ?>
+    <h2>Configurable Children:</h2>
+    <ul>
+        <?php foreach ($doc['child_products'] as $child): ?>
+            <li>
+                <?= safeEscape($block, $child['sku'] ?? '') ?>
+                (Price: <?= safeEscape($block, $child['price'] ?? '') ?>)
+            </li>
+        <?php endforeach; ?>
+    </ul>
+<?php endif; ?>

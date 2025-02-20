@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<page xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:noNamespaceSchemaLocation="urn:magento:framework:View/Layout/etc/page_configuration.xsd">
+
+    <body>
+        <!-- ✅ Instead of removing, we replace `product.info` with our custom block -->
+        <referenceBlock name="product.info">
+            <block class="ParkkTech\FastMagento\Block\Product\View"
+                   name="fastmagento_product_view"
+                   template="Magento_Catalog::product/view.phtml" />
+                 <!--  template="ParkkTech_FastMagento::product/view.phtml"-->
+
+        </referenceBlock>
+    </body>
+</page>

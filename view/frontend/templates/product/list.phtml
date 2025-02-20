@@ -1,0 +1,13 @@
+<?php
+/** @var $block ParkkTech\FastMagento\Block\Product\ListProduct */
+$products = $block->getProductCollection();
+?>
+
+<div class="fastmagento-product-list">
+    <?php foreach ($products as $product): ?>
+        <div class="product-item">
+            <h2><?= $product->getName(); ?></h2>
+            <p>Price: <?= $product->getPrice(); ?></p>
+        </div>
+    <?php endforeach; ?>
+</div>

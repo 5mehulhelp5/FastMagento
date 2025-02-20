@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:framework/Config/etc/system_file.xsd">
+    <tab id="fastmagento" translate="label" sortOrder="10">
+        <label>FastMagento</label>
+    </tab>
+</config>
