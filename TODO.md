@@ -49,3 +49,8 @@ There is alot of unused code in this module at the moment because I tried many d
 My initial though is if we can get this to work with PDPs flawlessly we can make a release of this extension to speed up PDP loading. I want to also release this on goRide. 
 
 Then we can be monitoring and debuging the PDP functionality while we work on moving to the category level functionality. 
+
+
+- Change 
+-- vendor/magento/module-catalog/Model/Product.php::convertToMediaGalleryInterface
+-- vendor/magento/module-catalog-inventory/Model/Plugin/AfterProductLoad.php::afterLoad
