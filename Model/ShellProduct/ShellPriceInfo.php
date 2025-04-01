@@ -15,7 +15,7 @@ class ShellPriceInfo implements PriceInfoInterface
 {
     private float $regularPrice;
     private float $finalPrice;
-    private float $specialPrice = 0.0;
+    private ?float $specialPrice = null;
 
     /** @var ShellPriceFactory */
     private ShellPriceFactory $shellPriceFactory;
@@ -36,7 +36,7 @@ class ShellPriceInfo implements PriceInfoInterface
         ShellPriceFactory $shellPriceFactory,
         float $regularPrice = 0.0,
         float $finalPrice = 0.0,
-        float $specialPrice = 0.0,
+        ?float $specialPrice = null,
         ?Config $msrpConfig = null,
         ?Msrp $msrp = null,
         ?Option $productOptions = null

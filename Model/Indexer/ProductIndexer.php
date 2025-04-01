@@ -1,26 +1,27 @@
 <?php
 
+declare(strict_types=1);
+
 namespace ParkkTech\FastMagento\Model\Indexer;
 
-
-use Magento\Framework\Indexer\ActionInterface;
-use Magento\Framework\Mview\ActionInterface as MviewActionInterface;
-use Magento\AdvancedSearch\Model\Client\ClientResolver;
-use Magento\Framework\Search\EngineResolverInterface;
-use Magento\Catalog\Model\ResourceModel\Product\CollectionFactory as ProductCollectionFactory;
-use Magento\ConfigurableProduct\Model\ResourceModel\Product\Type\Configurable as ConfigurableResource;
-use Magento\CatalogRule\Model\ResourceModel\Rule as CatalogRuleResource;
-use Magento\Framework\App\Config\ScopeConfigInterface;
-use Magento\Framework\Exception\LocalizedException;
 use Psr\Log\LoggerInterface;
+use Magento\Catalog\Model\ProductFactory;
+use Magento\Framework\Indexer\ActionInterface;
 use Magento\Framework\Api\SearchCriteriaBuilder;
 use Magento\Eav\Api\AttributeRepositoryInterface;
-use Magento\ConfigurableProduct\Model\Product\Type\Configurable;
-use Magento\GroupedProduct\Model\Product\Type\Grouped;
-use Magento\Bundle\Model\Product\Type as BundleType;
-use Magento\Eav\Model\Entity\Attribute\AbstractAttribute;
 use ParkkTech\FastMagento\Helper\OpenSearchConfig;
-
+use Magento\Framework\Exception\LocalizedException;
+use Magento\Bundle\Model\Product\Type as BundleType;
+use Magento\Framework\Search\EngineResolverInterface;
+use Magento\Framework\App\Config\ScopeConfigInterface;
+use Magento\GroupedProduct\Model\Product\Type\Grouped;
+use Magento\AdvancedSearch\Model\Client\ClientResolver;
+use Magento\Eav\Model\Entity\Attribute\AbstractAttribute;
+use Magento\ConfigurableProduct\Model\Product\Type\Configurable;
+use Magento\Framework\Mview\ActionInterface as MviewActionInterface;
+use Magento\CatalogRule\Model\ResourceModel\Rule as CatalogRuleResource;
+use Magento\Catalog\Model\ResourceModel\Product\CollectionFactory as ProductCollectionFactory;
+use Magento\ConfigurableProduct\Model\ResourceModel\Product\Type\Configurable as ConfigurableResource;
 
 class ProductIndexer implements ActionInterface, MviewActionInterface
 {
@@ -48,7 +49,8 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
         LoggerInterface $logger,
         SearchCriteriaBuilder $searchCriteriaBuilder,
         AttributeRepositoryInterface $attributeRepository,
-        OpenSearchConfig $openSearchConfig
+        OpenSearchConfig $openSearchConfig,
+        private ProductFactory $productFactory
     ) {
         $this->clientResolver = $clientResolver;
         $this->engineResolver = $engineResolver;
@@ -89,36 +91,70 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
         }
             $client->createIndex($indexName, $this->buildDynamicMapping());
 
-        $collection = $this->productCollectionFactory->create()
-            ->addAttributeToSelect('*')
-            ->addMediaGalleryData()
-            ->addFinalPrice()
-            ->addFieldToFilter('entity_id', ['in' => $ids])
-            ->setCurPage(1)
-            ->setPageSize(10);
+        if (empty($ids)) {
+            $collection = $this->productCollectionFactory->create();
+            $collection->addAttributeToSelect('entity_id');
+            foreach ($collection as $product) {
+                $ids[] = $product->getEntityId();
+            }
+        }
+
         $docs = [];
-        foreach ($collection as $product) {
+        foreach ($ids as $id) {
+            $productFactory = $this->productFactory->create();
+            $product = $productFactory->load($id);
+            if (!$product || !$product->getId()) {
+                continue;
+            }
+
+            $body = $this->prepareDoc($product);
+            $body = $this->setExtensionAttributes($body);
+
             $docs[] = [
                 'id' => (string)$product->getId(),
-                'body' => $this->prepareDoc($product)
+                'body' => $body
             ];
         }
         $this->bulkIndexNDJSON($client, $indexName, $docs);
     }
 
+    private function setExtensionAttributes($body) {
+        $extensionAttributes = isset($body['extension_attributes']) ? $body['extension_attributes'] : null;
+        if (null !== $extensionAttributes && $extensionAttributes instanceof \Magento\Catalog\Api\Data\ProductExtension) {
+            $stockItem = $extensionAttributes->getStockItem();
+            if (null !== $stockItem) {
+                $stockItemData = $stockItem->getData();
+
+                $categoryLinks = $extensionAttributes->getCategoryLinks();
+
+                $configurableProductLinks = [];
+                if (isset($body['type_id']) && $body['type_id'] == 'configurable') {
+                    $configurableProductLinks = $extensionAttributes->getConfigurableProductLinks();
+                }
+
+                //$body['extension_attributes']->setData('stock_item', $stockItemData);
+                unset($body['extension_attributes']);
+                $body['extension_attributes']['stock_item'] = $stockItemData;
+                $body['extension_attributes']['configurable_product_links'] = $configurableProductLinks;
+                $body['extension_attributes']['category_links'] = $categoryLinks;
+            }
+        }
+        return $body;
+    }
+
     public function executeFull()
     {
-        return $this->execute([]);
+        $this->execute([]);
     }
 
     public function executeList(array $ids)
     {
-        return $this->execute($ids);
+        $this->execute($ids);
     }
 
     public function executeRow($id)
     {
-        return $this->execute([$id]);
+        $this->execute([$id]);
     }
 
     private function getSearchClient()
@@ -132,6 +168,13 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
         return $this->openSearchConfig->getIndexName();
     }
 
+    /**
+     * @param $client
+     * @param string $indexName
+     * @param array $docs
+     * @return void
+     * @throws LocalizedException
+     */
     private function bulkIndexNDJSON($client, string $indexName, array $docs): void
     {
         if (!$docs) {
@@ -234,14 +277,35 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
         $productData['created_at'] = $this->formatDateForOpenSearch($product->getCreatedAt());
         $productData['updated_at'] = $this->formatDateForOpenSearch($product->getUpdatedAt());
         $productData['category_names'] = $this->getCategoryNames($product);
+
+        $productData['is_in_stock'] = (bool)$product->getExtensionAttributes()?->getStockItem()?->getIsInStock();
         $productData['stock_data'] = [
-            'is_in_stock' => (bool)$product->getExtensionAttributes()?->getStockItem()?->getIsInStock(),
-            'qty' => (float)$product->getExtensionAttributes()?->getStockItem()?->getQty(),
+            'qty' => (float)$product->getExtensionAttributes()?->getStockItem()?->getQty()
         ];
+
         //  $productData['media_gallery'] = $this->getMediaGallery($product);
          $productData['child_products'] = $this->getChildProducts($product);
          $configOptions = "configurable_options_" . $productData['entity_id'];
-         $productData[$configOptions] = $this->getConfigurableAttributes($product);
+         if ($product->getTypeId() == 'configurable') {
+             $attributesData = [];
+             $configurableAttributes = $product->getTypeInstance()->getConfigurableAttributes($product);
+             /** @var \Magento\ConfigurableProduct\Model\Product\Type\Configurable\Attribute $attribute */
+             foreach ($configurableAttributes as $attribute) {
+                 $attributesData[] = $attribute->getData();
+             }
+
+             foreach ($attributesData as &$currentAttributeData) {
+                 $currentAttributeDataProductData = $currentAttributeData['product_attribute']->getData();
+                 unset($currentAttributeData['product_attribute']);
+                 $currentAttributeData['product_attribute'] = $currentAttributeDataProductData;
+             }
+
+             $productData[$configOptions] = $attributesData;
+
+//             $productData[$configOptions] = $product->getTypeInstance()->getConfigurableOptions($product);
+         } else {
+             $productData[$configOptions] = [];
+         }
         // $productData['custom_attributes'] = $this->getCustomAttributes($product);
         // Merge attribute values dynamically into $productData
         $productData['attributes'] = $this->getAttributeValues($product);
@@ -254,7 +318,12 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
         // ✅ Add Parent IDs for Simple Products (If Configurable)
         if ($product->getTypeId() === 'simple') {
             $productData['parent_ids'] = $this->getParentIds($product);
+            $productData['final_price'] = (float)$product->getFinalPrice();
         }
+
+        $productData['website_ids'] = $product->getWebsiteIds();
+        $productData['store_id'] = $product->getStoreId();
+        $productData['store_ids'] = $product->getStoreIds();
 
         return $productData;
     }
@@ -381,10 +450,19 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
     public function getChildProducts(\Magento\Catalog\Model\Product $product)
     {
         $childProductsArray = [];
+        $configurableOptions = [];
 
         switch ($product->getTypeId()) {
             case Configurable::TYPE_CODE:
                 $childProducts = $product->getTypeInstance()->getUsedProducts($product);
+                $options = $product->getTypeInstance()->getConfigurableOptions($product);
+                foreach ($options as $option) {
+                    foreach ($option as $item) {
+                        if (isset($item['attribute_code']) && !in_array($item['attribute_code'], $configurableOptions)) {
+                            $configurableOptions[] = $item['attribute_code'];
+                        }
+                    }
+                }
                 break;
 
             case Grouped::TYPE_CODE:
@@ -404,6 +482,7 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
         // ✅ Convert child product objects to array for OpenSearch
        if(isset($childProducts)) {
            foreach ($childProducts as $child) {
+               $child = $this->productFactory->create()->load($child->getId());
                $childProductsArray[] = [
                    'entity_id' => (int)$child->getId(),
                    'sku' => $child->getSku(),
@@ -416,7 +495,9 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
                    'image' => $child->getImage() ?? '',
                    'small_image' => $child->getSmallImage() ?? '',
                    'thumbnail' => $child->getThumbnail() ?? '',
-                   'custom_attributes' => $this->getCustomAttributesArray($child),
+                   'custom_attributes' => $this->getCustomAttributesArray($child, $configurableOptions),
+                   'store_id' => $child->getStoreId(),
+                   'store_ids' => $child->getStoreIds()
                ];
            }
        }
@@ -425,12 +506,17 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
         return $childProductsArray;
     }
 
-    private function getCustomAttributesArray(\Magento\Catalog\Model\Product $product): array
+    private function getCustomAttributesArray(\Magento\Catalog\Model\Product $product, array $configurableOptions): array
     {
         $customAttributes = [];
         foreach ($product->getAttributes() as $attribute) {
             $attributeCode = $attribute->getAttributeCode();
             $value = $product->getData($attributeCode);
+
+            if (in_array($attributeCode, $configurableOptions)) {
+                $customAttributes[$attributeCode] = $value;
+                continue;
+            }
 
             if ($attribute->usesSource()) {
                 $value = $product->getAttributeText($attributeCode);
@@ -454,7 +540,6 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
         /** @var \Magento\ConfigurableProduct\Model\Product\Type\Configurable $configType */
         $configType = $product->getTypeInstance();
 
-        /** @var \Magento\ConfigurableProduct\Model\Attribute\OptionProvider $configurableAttributes */
         $attributes = $configType->getConfigurableAttributes($product);
 
         foreach ($attributes as $attribute) {
@@ -468,7 +553,7 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
                 'id'     => (int) $productAttribute->getAttributeId(),
                 'code'   => $attributeCode,
                 'label'  => $productAttribute->getStoreLabel(),
-                'values' => $this->getAttributeOptions($productAttribute),
+                'values' => $attribute->getOptions(),
             ];
         }
 
@@ -484,14 +569,12 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
             foreach ($source->getAllOptions() as $option) {
                 if (!empty($option['value'])) {
                     $options[] = [
-                        'id'    => (int) $option['value'],
-                        'label' => (string) $option['label'],
+                        'id' => (int)$option['value'],
+                        'label' => (string)$option['label'],
                     ];
                 }
             }
         }
-
         return $options;
     }
-
 }
