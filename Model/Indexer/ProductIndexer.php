@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace ParkkTech\FastMagento\Model\Indexer;
 
 use Psr\Log\LoggerInterface;
+use Magento\Catalog\Model\Product;
 use Magento\Catalog\Model\ProductFactory;
+use ParkkTech\FastMagento\Helper\WriteLog;
 use Magento\Framework\Indexer\ActionInterface;
 use Magento\Framework\Api\SearchCriteriaBuilder;
 use Magento\Eav\Api\AttributeRepositoryInterface;
 use ParkkTech\FastMagento\Helper\OpenSearchConfig;
+use Magento\Catalog\Api\ProductRepositoryInterface;
 use Magento\Framework\Exception\LocalizedException;
 use Magento\Bundle\Model\Product\Type as BundleType;
 use Magento\Framework\Search\EngineResolverInterface;
@@ -50,7 +53,9 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
         SearchCriteriaBuilder $searchCriteriaBuilder,
         AttributeRepositoryInterface $attributeRepository,
         OpenSearchConfig $openSearchConfig,
-        private ProductFactory $productFactory
+        private ProductFactory $productFactory,
+        private WriteLog $writeLog,
+        private ProductRepositoryInterface $productRepository
     ) {
         $this->clientResolver = $clientResolver;
         $this->engineResolver = $engineResolver;
@@ -63,6 +68,7 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
         $this->attributeRepository = $attributeRepository;
         $this->openSearchConfig = $openSearchConfig;
             }
+
     private function getDefaultMagentoAttributes(): array
     {
         return [
@@ -82,14 +88,55 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
         ];
     }
 
+    public function executeRow($id): void
+    {
+        try {
+            /** @var Product $product */
+            $product = $this->productCollectionFactory->create()
+                ->addAttributeToSelect('*')
+                ->addFieldToFilter('entity_id', $id)
+                ->getFirstItem();
+
+            $productId = $product->getId();
+
+            if (!$product || !$productId) {
+                $this->writeLog->writeErrorLog("[FastMagento] Product ID $id not found.");
+                return;
+            }
+
+            $productStoreIds = $product->getStoreIds();
+            if (empty($productStoreIds)) {
+                $this->writeLog->writeErrorLog('Product ID: ' . $productId . ' Has No Store IDs.');
+                return;
+            }
+
+            foreach ($productStoreIds as $storeId) {
+                /** @var Product $product */
+                $product = $this->productRepository->getById($productId, false, $storeId, false);
+
+                $productData = $this->prepareDoc($product);
+                $productData = $this->setExtensionAttributes($productData);
+                $doc = [
+                    'id' => $product->getId(),
+                    'body' => $productData
+                ];
+            }
+
+            $indexName = $this->getIndexName();
+            $client = $this->getSearchClient();
+
+            $this->bulkIndexNDJSON($client, $indexName, [$doc]);
+
+            $this->writeLog->writeInfoLog("[FastMagento] Product ID $id reindexed successfully.");
+        } catch (\Exception $e) {
+            $this->writeLog->writeErrorLog("[FastMagento] executeRow error: " . $e->getMessage());
+        }
+    }
+
     public function execute($ids)
     {
         $indexName = $this->getIndexName();
         $client = $this->getSearchClient();
-        if ($client->indexExists($indexName)) {
-            $client->deleteIndex($indexName);
-        }
-            $client->createIndex($indexName, $this->buildDynamicMapping());
 
         if (empty($ids)) {
             $collection = $this->productCollectionFactory->create();
@@ -103,18 +150,33 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
         foreach ($ids as $id) {
             $productFactory = $this->productFactory->create();
             $product = $productFactory->load($id);
-            if (!$product || !$product->getId()) {
+
+            $productId = $product->getId();
+
+            if (!$product || !$productId) {
                 continue;
             }
 
-            $body = $this->prepareDoc($product);
-            $body = $this->setExtensionAttributes($body);
+            $productStoreIds = $product->getStoreIds();
+            if (empty($productStoreIds)) {
+                $this->writeLog->writeErrorLog('Product ID: ' . $productId . ' Has No Store IDs.');
+                continue;
+            }
 
-            $docs[] = [
-                'id' => (string)$product->getId(),
-                'body' => $body
-            ];
+            foreach ($productStoreIds as $storeId) {
+                /** @var Product $product */
+                $product = $this->productRepository->getById($productId, false, $storeId, false);
+
+                $body = $this->prepareDoc($product);
+                $body = $this->setExtensionAttributes($body);
+
+                $docs[] = [
+                    'id' => (string)$product->getId(),
+                    'body' => $body
+                ];
+            }
         }
+
         $this->bulkIndexNDJSON($client, $indexName, $docs);
     }
 
@@ -144,17 +206,19 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
 
     public function executeFull()
     {
+        $indexName = $this->getIndexName();
+        $client = $this->getSearchClient();
+        if ($client->indexExists($indexName)) {
+            $client->deleteIndex($indexName);
+        }
+        $client->createIndex($indexName, $this->buildDynamicMapping());
+
         $this->execute([]);
     }
 
     public function executeList(array $ids)
     {
         $this->execute($ids);
-    }
-
-    public function executeRow($id)
-    {
-        $this->execute([$id]);
     }
 
     private function getSearchClient()
@@ -375,9 +439,6 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
 
         return $attributes;
     }
-
-
-
 
     private function getCategoryNames(\Magento\Catalog\Model\Product $product): array
     {
