@@ -1,4 +1,5 @@
 <?php
+
 namespace ParkkTech\FastMagento\Helper;
 
 use Magento\Eav\Model\Config as EavConfig;
@@ -51,7 +52,7 @@ class ShellProductBuilder
     private ProductRepositoryInterface $productRepository;
     private DataObjectHelper $dataObjectHelper;
 
-    private CollectionFactory  $collectionFactory;
+    private CollectionFactory $collectionFactory;
 
 
     /**
@@ -74,8 +75,8 @@ class ShellProductBuilder
         private EavConfig $eavConfig,
         private EavAttributeFactory $eavAttributeFactory
     ) {
-        $this->shellProductFactory     = $shellProductFactory;
-        $this->shellPriceFactory       = $shellPriceFactory;
+        $this->shellProductFactory = $shellProductFactory;
+        $this->shellPriceFactory = $shellPriceFactory;
         $this->shellDataProductFactory = $shellDataProductFactory;
         $this->shellNoEavProductFactory = $shellNoEavProductFactory;
         $this->mediaGalleryEntryFactory = $mediaGalleryEntryFactory;
@@ -142,7 +143,7 @@ class ShellProductBuilder
     public function buildDataProductFromOsDoc(array $doc): ShellDataProduct
     {
         $regular = isset($doc['price']) ? (float)$doc['price'] : 0.0;
-        $final   = isset($doc['final_price']) ? (float)$doc['final_price'] : $regular;
+        $final = isset($doc['final_price']) ? (float)$doc['final_price'] : $regular;
         $special = isset($doc['special_price']) ? (float)$doc['special_price'] : 0.0;
 
         $shellPriceInfo = new ShellPriceInfo(
@@ -154,7 +155,7 @@ class ShellProductBuilder
 
         /** @var ShellDataProduct $shellDataProduct */
         $shellDataProduct = $this->shellDataProductFactory->create([
-            'doc'       => $doc,
+            'doc' => $doc,
             'priceInfo' => $shellPriceInfo
         ]);
 
@@ -344,7 +345,8 @@ class ShellProductBuilder
 
 
         // If you want a custom ShellPriceInfo:
-         $priceInfo = new ShellPriceInfo($this->shellPriceFactory, $regular, $final, $special);
+        $catalogRulePrice = $osDoc['catalog_rule_price']['rule_price'] ?? null;
+        $priceInfo = new ShellPriceInfo($this->shellPriceFactory, $regular, $final, $special, $catalogRulePrice);
         $product->setPriceInfo($priceInfo);
 
         return $product;

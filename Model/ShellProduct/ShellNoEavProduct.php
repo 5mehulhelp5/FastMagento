@@ -169,12 +169,16 @@ class ShellNoEavProduct extends CoreProduct
 
     public function getPrice()
     {
-        return $this->doc['price'] ?? parent::getPrice();
+        return $this->getData('catalog_rule_price')['rule_price']
+            ?? $this->doc['final_price']
+            ?? parent::getPrice();
     }
 
     public function getFinalPrice($qty = null)
     {
-        return $this->doc['final_price'] ?? parent::getFinalPrice($qty);
+        return $this->getData('catalog_rule_price')['rule_price']
+            ?? $this->doc['final_price']
+            ?? parent::getFinalPrice($qty);
     }
 
     public function getSpecialPrice()
@@ -278,6 +282,11 @@ public function getProductUrl($useSid = null)
     public function _afterLoad()
     {
         return $this;
+    }
+
+    public function getPriceInfo()
+    {
+        return $this->priceInfo ?? parent::getPriceInfo();
     }
 }
 

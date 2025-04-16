@@ -70,6 +70,13 @@
         <plugin name="catalogInventoryAfterLoad" disabled="true"/>
     </type>
 
+    <type name="Magento\Checkout\Model\Cart">
+        <plugin name="fastmagento_set_custom_price" type="ParkkTech\FastMagento\Plugin\Checkout\AddProductPlugin" />
+    </type>
+    <type name="Magento\Quote\Model\Quote\Item">
+        <plugin name="inject_price_on_get_product" type="ParkkTech\FastMagento\Plugin\Quote\QuoteItemPlugin" />
+    </type>
+
     <!-- ✅ Override Magento's front-end Product View Controller -->
 <!--
     <preference for="Magento\Catalog\Controller\Product\View"
