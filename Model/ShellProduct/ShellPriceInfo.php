@@ -29,6 +29,8 @@ class ShellPriceInfo implements PriceInfoInterface
     /** @var Option|null */
     private ?Option $productOptions;
 
+    private ?float $catalogRulePrice = null;
+
     /**
      * $shellPriceFactory is first, then numeric prices (regular, final, special), then optional msrp stuff.
      */
@@ -37,14 +39,16 @@ class ShellPriceInfo implements PriceInfoInterface
         float $regularPrice = 0.0,
         float $finalPrice = 0.0,
         ?float $specialPrice = null,
+        ?float $catalogRulePrice = null,
         ?Config $msrpConfig = null,
         ?Msrp $msrp = null,
         ?Option $productOptions = null
     ) {
         $this->shellPriceFactory = $shellPriceFactory;
         $this->regularPrice   = $regularPrice;
-        $this->finalPrice     = $finalPrice;
+        $this->finalPrice     = $catalogRulePrice ?? $finalPrice;
         $this->specialPrice   = $specialPrice;
+        $this->catalogRulePrice = $catalogRulePrice;
         $this->msrpConfig     = $msrpConfig;
         $this->msrp           = $msrp;
         $this->productOptions = $productOptions;
@@ -56,14 +60,6 @@ class ShellPriceInfo implements PriceInfoInterface
     public function getPrice($code)
     {
         switch ($code) {
-            case 'final_price':
-                return $this->shellPriceFactory->create([
-                    'value' => $this->finalPrice,
-                    'msrpConfig' => $this->msrpConfig,
-                    'msrp' => $this->msrp,
-                    'productOptions' => $this->productOptions
-                ]);
-
             case 'regular_price':
                 return $this->shellPriceFactory->create([
                     'value' => $this->regularPrice,
@@ -84,6 +80,15 @@ class ShellPriceInfo implements PriceInfoInterface
                 // Return a ShellPrice with 0.0 or some "tier" logic
                 return $this->shellPriceFactory->create([
                     'value' => 0.0,
+                    'msrpConfig' => $this->msrpConfig,
+                    'msrp' => $this->msrp,
+                    'productOptions' => $this->productOptions
+                ]);
+
+            case 'final_price':
+            case 'catalog_rule_price':
+                return $this->shellPriceFactory->create([
+                    'value' => $this->catalogRulePrice ?? $this->finalPrice,
                     'msrpConfig' => $this->msrpConfig,
                     'msrp' => $this->msrp,
                     'productOptions' => $this->productOptions
