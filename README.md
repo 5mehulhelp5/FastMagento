@@ -1,16 +1,102 @@
-# FastMagento — OpenSearch Serving Layer for Magento 2
+<h1 align="center">⚡ FastMagento</h1>
+<p align="center"><strong>OpenSearch Serving Layer &amp; Large-Catalog Toolkit for Magento&nbsp;2</strong><br/>
+<em>Millisecond pages. Real-time index. Search so good it's almost unfair.</em></p>
 
-FastMagento makes **OpenSearch the primary serving layer** for the Magento 2 storefront.
-Products, the category tree, PDP, search and layered navigation are hydrated from OpenSearch
-instead of Magento's EAV/ORM, while **MySQL stays the source of truth**. Reads are
-transparent to third-party code (a real `Magento\Catalog\Model\Product` / `Category` object
-is hydrated from the OpenSearch document), it runs on **base Magento only**, and it is
-**Full-Page-Cache / Varnish safe**.
+<p align="center">
+  <img alt="Magento" src="https://img.shields.io/badge/Magento-2.4.x-f46f25?logo=magento&logoColor=white"/>
+  <img alt="OpenSearch" src="https://img.shields.io/badge/OpenSearch-1.x%20%7C%202.x-005EB8?logo=opensearch&logoColor=white"/>
+  <img alt="PHP" src="https://img.shields.io/badge/PHP-8.1--8.3-777bb4?logo=php&logoColor=white"/>
+  <img alt="Base Magento only" src="https://img.shields.io/badge/base%20Magento-no%20core%20patches-2ea44f"/>
+  <img alt="FPC / Varnish safe" src="https://img.shields.io/badge/FPC%20%2F%20Varnish-safe-2ea44f"/>
+  <img alt="AI search" src="https://img.shields.io/badge/AI%20search-Claude-8A63D2"/>
+</p>
 
-The goal is to drive product/EAV SQL toward zero on the hot paths.
+> 🐌➡️🚀 Magento 2 is powerful, extensible, and — on a big catalog — perfectly happy to run 20,000 SQL
+> queries to render a homepage and loop your inventory tables *thirty times* just because you
+> **dared** to add something to the cart. FastMagento is what happened when we got tired of
+> watching the spinner.
+
+**What it is.** FastMagento makes **OpenSearch the primary serving layer** for the Magento 2
+storefront. Product data, prices, stock, the category tree, PDP, search and layered navigation are
+served from **OpenSearch** instead of Magento's EAV/ORM — while **MySQL stays the source of truth**
+and every change is pushed into OpenSearch **in real time**. Reads stay transparent to third-party
+code (a real `Magento\Catalog\Model\Product` / `Category` object is hydrated from the index), it
+runs on **base Magento only**, and it is **Full-Page-Cache / Varnish safe**.
+
+## Why it exists (the honest origin story)
+
+It started as one simple goal: **make Magento faster**. Then we tried to run a real store on it — a
+lingerie catalogue with **50,000+ colour and colour-combination options** and configurable products
+with **7,500+ variations each** — and Magento, bless it, fell over. There *had* to be a way to serve
+that data fast and efficiently. This extension is that way.
+
+So a "make it faster" project quietly became **"make Magento handle *huge* catalogs"**, and along
+the way it grew into a set of **standalone features** — each one solving a real large-catalog pain
+point on its own (see the feature sections below). Adopt the whole serving layer, or just the one
+piece you came here for.
+
+**Checkout is now lightning fast.** Native Magento loops the inventory tables ~30 times just to add
+a product to the cart — then loops them *again* when the cart page loads. FastMagento strips those
+redundancies and offloads the heavy database work to OpenSearch, which **indexes updates instantly**
+and serves even very complex configurable pages in **milliseconds**. At that point the only real
+overhead left is Magento bootstrapping itself.
 
 **🔗 See it in action:** [www.diyoffroad.com](https://www.diyoffroad.com/) — a live storefront
 running this serving layer.
+
+## 🎬 See the magic (live demos)
+
+> Watch it happen — no page reloads, no spinners, on a catalog this size. *(GIFs recorded from the
+> live storefront; drop-in replacements at the paths below.)*
+
+<table>
+<tr>
+<td width="33%" align="center">
+  <img src="docs/img/demo-autocomplete.gif" alt="As-you-type autocomplete search from OpenSearch" width="100%"/>
+  <br/><strong>⌨️ Autocomplete</strong><br/><sub>Products + categories appear as you type, in milliseconds.</sub>
+</td>
+<td width="33%" align="center">
+  <img src="docs/img/demo-instant-serp.gif" alt="Instant search results page updating live with no reload" width="100%"/>
+  <br/><strong>⚡ Instant SERP</strong><br/><sub>The whole results grid re-renders live — zero page reloads.</sub>
+</td>
+<td width="33%" align="center">
+  <img src="docs/img/demo-shop-by.gif" alt="Shop By layered navigation updating in real time" width="100%"/>
+  <br/><strong>🎛️ Live "Shop By"</strong><br/><sub>Tick a filter → grid, counts &amp; facets update instantly.</sub>
+</td>
+</tr>
+</table>
+
+<sub>💡 GIF paths: <code>docs/img/demo-autocomplete.gif</code>, <code>docs/img/demo-instant-serp.gif</code>,
+<code>docs/img/demo-shop-by.gif</code>. For crisper, smaller files GitHub also autoplays looping
+muted <code>&lt;video&gt;</code> (MP4/WebM) — swap the <code>&lt;img&gt;</code> tags if preferred.</sub>
+
+> ### 🎸 And here's the kicker
+> **All of this is pure *backend* performance — no Hyvä, no Swissup Breeze, no theme surgery
+> required.** FastMagento makes Magento *serve* data in milliseconds on the stock Luma frontend.
+> Now **pair it with a fast frontend theme** like Hyvä or Swissup Breeze, and you've got a genuine
+> **banger of a site** — lightning back end *and* front end. They optimize the paint; we obliterate
+> the data cost underneath it. 🤝
+
+## Problems it solves (problem → solution)
+
+Every one of these is a real Magento 2 pain on a large catalog — and a standalone reason to install:
+
+- **Problem:** a homepage/PDP fires thousands of EAV queries and cold pages crawl.
+  **Solution:** products are served from OpenSearch as real product objects → **0 product/EAV SQL** on the hot path.
+- **Problem:** adding to cart loops the inventory tables ~30×, and the cart page loops them again.
+  **Solution:** Fast Checkout serves lines from the index and drops the redundant stock revalidation → cart render **flat** (~4 s → ~0.4 s on a 7-item cart), can't oversell.
+- **Problem:** a configurable with thousands of variants melts PDP/cart with a per-child price/stock N+1.
+  **Solution:** per-child price/stock/rule data is pre-indexed → the ~660/7,500-child N+1 becomes **0 price SQL**.
+- **Problem:** the category menu, breadcrumbs and layered nav fan out into `catalog_category_entity_*` UNIONs and a per-category URL-rewrite N+1.
+  **Solution:** the whole tree is served from one OpenSearch read → **0 category EAV reads**, URL-rewrites batched to one query.
+- **Problem:** Magento search is slow, reloads the whole page to filter, and ranks poorly.
+  **Solution:** instant autocomplete + a **live SERP with live layered navigation** (no reload) + AI-tuned relevance.
+- **Problem:** an attribute with 50k options (colors) makes the admin attribute page **hang or crash**.
+  **Solution:** a **paginated option manager** — one page at a time, search by name/ID, single-row edit/delete.
+- **Problem:** the frontend and the admin fight over the same database, so the back office is slow under load.
+  **Solution:** the heavy read path moves to OpenSearch → the **admin gets faster on the same hardware**.
+- **Problem:** going fast usually means core patches or ripping out third-party modules.
+  **Solution:** **base Magento only**, real product objects, FPC/Varnish-safe, every feature toggle-able → drop-in.
 
 ### Built for large, attribute-heavy, complex-configurable catalogs
 
@@ -44,6 +130,76 @@ query reductions but feels less wall-clock benefit (see the note under Benchmark
 | PDP (any type) | hundreds of EAV queries | **0 product/EAV SQL** |
 | Category page | ~58+ category/EAV queries | **0 product/EAV SQL** |
 | Search results | 342 SQL | 118 SQL |
+
+---
+
+## 📊 Performance at scale — 500,000 products (with vs without)
+
+> Measured on a purpose-built **500,000-product** stress catalog (513k simple products across
+> **4,187 configurables**, a **50,000-option** color attribute, every bra/apparel size) in an
+> isolated database. **Apples-to-apples**: the module is fully **disabled** (`module:disable`, real
+> native MySQL) vs **enabled**, replaying the *same* URLs and the *same* 10-configured-item cart.
+> **Cold render** (Full-Page-Cache disabled) — the honest comparison, because on an FPC *hit* both
+> states serve identical cached HTML. The store runs its real third-party stack (Webkul
+> Marketplace, Stripe, …) on every page in **both** columns.
+
+**Page load / render time @ 500k products (cold render)**
+
+| Surface | Without (native) | With FastMagento | Speed-up |
+|---|---:|---:|---:|
+| Home / CMS | 893 ms | **553 ms** | **1.6×** |
+| PDP · simple | 546 ms | 512 ms | ~1× |
+| PDP · configurable (660-variant) | 1,354 ms | **918 ms** | **1.5×** |
+| Category / PLP | 560 ms | 593 ms | ~1× |
+| Search results (SERP) | 1,720 ms | **714 ms** | **2.4×** |
+| Cart · collectTotals (10 configured) | 543 ms | **117 ms** | **4.6×** |
+| Checkout · `totals-information` | 1,636 ms | **1,118 ms** | **1.5×** |
+
+**SQL queries per cold render @ 500k products** — the scale-invariant metric:
+
+| Surface | Without (native) | With FastMagento | Reduction |
+|---|---:|---:|---:|
+| Home / CMS | 5,734 | **116** | **−98%** |
+| PDP · simple | 822 | 512 | −38% |
+| PDP · configurable | 774 | 494 | −36% |
+| Category / PLP | 484 | 256 | −47% |
+| Search results | 610 | **48** | **−92%** |
+| Cart · collectTotals (10 configured) | 1,683 | **141** | **−92%** |
+| Checkout · `totals-information` | 2,688 | 654 | −76% |
+
+> **How to read it (honestly).** The **query-count collapse is the headline** — the homepage alone
+> goes **5,734 → 116** queries, and the never-cached cart/checkout path drops **~12×**. Wall-clock
+> wins are biggest where data-loading is the bottleneck (home, search, configurable PDP, cart);
+> it's roughly flat on light pages (simple PDP, small category) because there the time is dominated
+> by PHP rendering + third-party modules (**Webkul Marketplace alone fires ~180 queries/PDP**),
+> which are identical in both columns. On a production DB (millions of EAV rows, 1–5 ms/query,
+> networked/replicated) that same query collapse is **seconds** of latency and a large drop in DB
+> load. The design goal — **product/EAV SQL stays flat as the catalog grows** — holds; native does
+> not. These page-time figures are **server response (TTFB-class)**; the real *browser* gap is
+> wider, because native Magento also ships a heavier DOM (more blocks, more inline data) that costs
+> the browser more to parse and render — a full-page-load (DOMContentLoaded / fully-loaded)
+> comparison amplifies the difference beyond what server time alone shows.
+
+**Cached (FPC hit) @ 500k** — the returning-user experience:
+
+| Surface | With **or** without FastMagento |
+|---|---:|
+| Any FPC-cached page (home, PDP, category) | **~231 ms** (identical — served from cache) |
+| Search results (not FPC-cached) | ~665 ms |
+
+> On an FPC hit both states are identical (~231 ms) — the extension's win is on cache **miss** (first
+> views, high-churn catalogs) and the **never-cached** paths: search, cart, checkout.
+
+**Admin @ 500k** — the 50,000-option attribute:
+
+| Metric | Without (native) | With FastMagento |
+|---|---:|---:|
+| Attribute-edit page (50k-option `color`) | **crashes / hangs** | **opens instantly** (paginated, 50/page) |
+
+<p align="center"><img src="docs/img/demo-attribute-manager.gif" alt="Paginated attribute-option manager on a 50,000-option attribute" width="100%"/></p>
+
+> The reference numbers below are from a mid-sized (~14.6k-product) catalog; the 500k tables above
+> are the headline "does it hold at scale" proof.
 
 ---
 
@@ -137,64 +293,219 @@ native path automatically.
 
 ---
 
-## Features
+## Features at a glance
 
-- **Product serving** — every product read on the storefront (PDP, cart, related/up-sell,
-  search hydration, product sliders) is answered by a `ShellNoEavProduct`: a real
-  `Magento\Catalog\Model\Product` subclass whose `load()` is a no-op and whose getters return
-  from the indexed `_source`. This removes the per-product
-  `catalog_product_entity_{varchar,int,decimal,text,datetime}` EAV multi-table load and its
-  option-label lookups. It serves price, special/tier/catalog-rule prices (per customer group),
-  stock, media gallery, category names, URLs and every custom attribute — with select/multiselect
-  values pre-resolved to **labels** in the index.
-- **Category serving layer** — a dedicated `fastmagento_category` indexer (`magento2_categories`)
-  projects the whole tree; a request-scoped provider pulls it in **one** search and answers the
-  mega-menu, top navigation, breadcrumbs and layered-navigation **category data** from memory,
-  eliminating the `catalog_category_entity_{varchar,int,text}` UNION attribute loads (**0 category
-  EAV reads**). A batched URL finder collapses the per-category `url_rewrite` N+1 (~108 queries →
-  one per store). *(The category page's product grid still renders natively for now; the search
-  results page below is the fully OS-served, live listing.)*
-- **Related / up-sell / cross-sell & product sliders** — link blocks and slider widgets hydrate
-  from OpenSearch (one link-graph query + one `mget`), and child→parent lookups resolve from the
-  indexed `parent_ids` — removing the per-item EAV load, the per-card `url_rewrite` N+1, and the
-  `catalog_product_super_link` parent N+1.
-- **All product types**
-  - Simple & Virtual — fully served.
-  - **Downloadable** — links and samples are indexed and hydrated into the native
-    downloadable blocks (title, price, per-link samples), rendered with 0 downloadable SQL.
-  - **Configurable** — swatch `jsonConfig`, per-option prices and swatch config are served
-    from OpenSearch; the PDP renders the full swatch UI. Out-of-stock option combinations
-    still render (greyed), matching Magento's default behaviour.
-- **Realtime instant search + live layered navigation** — an as-you-type header dropdown
-  (product cards + category suggestions) **and** a fully live search results page: the product
-  grid, pagination **and the layered-navigation facets** all re-render in place from OpenSearch
-  with **no page reload** (Algolia-style) as you type, tick a filter, or page — the URL updates
-  via `history.replaceState`. Facets (category + configured attributes, e.g. Part Type / Color /
-  Link Style) are built from OpenSearch aggregations and their option **labels come straight from
-  the index** — no DB/EAV lookup on the request path. The native Magento layered nav is replaced
-  outright. Configure via `FastMagento > Search > Facet Attributes`. Endpoints:
-  `/fastmagento/search/suggest` and `/fastmagento/search/instant`.
-- **Fast Checkout** (**on by default**) — serves cart/checkout line products, including
-  configurable variants, from the index instead of the native ~217-query quote-item collection
-  build (product/EAV ≈119 + MSI stock ≈71 + downloadable ≈27), and skips the redundant per-load
-  stock revalidation. Removes the multi-second cost of configurable line items at checkout (see
-  Benchmarks). One master toggle, `FastMagento > Fast Checkout > Enable Fast Checkout`, turns on
-  the whole fast pipeline (OS-serve + optimistic stock + fast stock sync); order placement still
-  gates stock by SKU so it cannot oversell, and anything not fully in the index falls back to
-  native automatically.
-- **Real-time stock sync** — order placement, refunds/returns and MSI inventory-API writes
-  reproject the affected products (and their configurable/grouped/bundle parents) into the index
-  immediately — after `fastcgi_finish_request`, so the shopper never waits — keeping quantity and
-  in-stock status live between reindexes. **Fast stock sync** (on with Fast Checkout) patches only
-  the stock fields of the affected docs via one `mget` + bulk update instead of a full EAV
-  reprojection, and falls back to a full reproject for any doc missing/partial in the index.
-- **Always-ready index** — catalog-rule recalculations (rule save / nightly apply-all) patch
-  the affected docs' per-group rule prices into the index automatically, so the OS-served
-  cart is correct without a manual reindex.
-- **Read-path resilience** — *warm-on-miss* (a product missing from the index is added on
-  first access, self-healing like a cache miss) and automatic native fallback whenever
-  OpenSearch is unavailable.
-- **Cache/Varnish transparent** — serving happens beneath FPC and the layout cache.
+Every capability below is a **standalone feature** — run the whole serving layer, or just the one
+you came for:
+
+| Feature | What it fixes |
+|---|---|
+| 📦 [OpenSearch product serving (PHP loads from OS)](#feature-opensearch-product-serving-zero-eav-reads) | 0 product/EAV SQL on PDP, cart, listings |
+| 🗂️ [Category & navigation serving](#feature-category--navigation-serving) | 0 category EAV reads for menu / breadcrumbs / nav |
+| 🔗 [Related, up-sell, cross-sell & sliders](#feature-related-up-sell-cross-sell--product-sliders) | per-item EAV + URL-rewrite N+1 |
+| 🧩 [All product types served](#feature-all-product-types-served) | simple, configurable, downloadable, virtual |
+| ⌨️ [Autocomplete search (as-you-type)](#feature-autocomplete-search-as-you-type-dropdown) | slow native autocomplete |
+| ⚡ [Instant search results page (live SERP)](#feature-instant-search-results-page-live-serp-no-reload) | full page reload to search |
+| 🎛️ [Live layered navigation on search](#feature-live-layered-navigation-on-search-instant-shop-by) | full reload to filter / "Shop By" |
+| 🤖 [AI-powered search relevance & keywords](#ai-powered-search-relevance-search-so-good-its-almost-unfair) | poor Magento relevance on big catalogs |
+| 🛒 [Fast Checkout](#feature-fast-checkout--no-more-30-inventory-loops) | 30× inventory loops on add-to-cart / cart |
+| 🔄 [Real-time stock & price sync](#feature-real-time-stock--price-sync) | stale index after orders / rule changes |
+| 💲 [Per-customer-group & B2B pricing](#feature-per-customer-group--b2b-pricing-served-from-the-index) | per-group price N+1 |
+| 🎨 [Paginated attribute options (50k+) — filter & bulk-clean unused](#feature-paginated-attribute-options--manage-50000-options-without-crashing) | attribute page crashing at 50k+ options; thousands of unused options |
+| 🏷️ [Option labels served from OpenSearch](#feature-option-labels-served-from-opensearch-no-mysql-on-the-hot-path) | residual `eav_attribute_option` reads on PDP / PLP / search |
+| 🏎️ [Faster admin on the same hardware](#feature-faster-admin-on-the-same-hardware) | admin slow while frontend hits the DB |
+| 🛟 [Read-path resilience & fallback](#feature-read-path-resilience--fallback) | OpenSearch outage safety |
+| 🔌 [Drop-in & third-party transparent](#feature-drop-in--third-party-transparent-base-magento-only) | going fast without core patches |
+
+---
+
+## Feature: OpenSearch product serving (zero EAV reads)
+
+> **Zero.** That's how many product/EAV queries your PDP fires now. Not *fewer* — **zero**. Go
+> ahead, count them. We'll wait. 😏
+
+Every product read on the storefront — PDP, cart, related/up-sell, search hydration, product
+sliders — is answered by a `ShellNoEavProduct`: a real `Magento\Catalog\Model\Product` subclass
+whose `load()` is a no-op and whose getters return from the indexed `_source`. This removes the
+per-product `catalog_product_entity_{varchar,int,decimal,text,datetime}` EAV multi-table load and
+its option-label lookups, and serves price, special/tier/catalog-rule prices (per customer group),
+stock, media gallery, category names, URLs and every custom attribute — with select/multiselect
+values pre-resolved to **labels** in the index. Because it stays a real product object, third-party
+blocks, plugins and SEO modules keep working unchanged.
+
+## Feature: Category & navigation serving
+
+> **Your mega-menu used to cost 100+ queries every single page load.** Now the entire category tree
+> arrives in *one* search and lives in memory. Breadcrumbs, nav, "Shop By" parents — all free.
+
+A dedicated `fastmagento_category` indexer (`magento2_categories`) projects the whole tree; a
+request-scoped provider pulls it in **one** search and answers the mega-menu, top navigation,
+breadcrumbs and layered-navigation **category data** from memory — eliminating the
+`catalog_category_entity_{varchar,int,text}` UNION attribute loads (**0 category EAV reads**). A
+batched URL finder collapses the per-category `url_rewrite` N+1 (~108 queries → one per store).
+*(The category page's product grid still renders natively today; the search results page is the
+fully OS-served, live listing — server-side OS-serving of the category grid is on the roadmap.)*
+
+## Feature: Related, up-sell, cross-sell & product sliders
+
+Link blocks and slider widgets hydrate from OpenSearch (one link-graph query + one `mget`), and
+child→parent lookups resolve from the indexed `parent_ids` — removing the per-item EAV load, the
+per-card `url_rewrite` N+1, and the `catalog_product_super_link` parent N+1 that make product
+sliders quietly expensive on every page.
+
+## Feature: All product types served
+
+- **Simple & Virtual** — fully served.
+- **Downloadable** — links and samples are indexed and hydrated into the native downloadable blocks
+  (title, price, per-link samples), rendered with **0 downloadable SQL**.
+- **Configurable** — swatch `jsonConfig`, per-option prices and swatch config are served from
+  OpenSearch; the PDP renders the full swatch UI, even for configurables with **thousands** of
+  variants. Out-of-stock option combinations still render greyed, matching Magento's default.
+- **Grouped / Bundle** — indexed; add-to-cart hardening in progress.
+
+## Feature: Autocomplete search (as-you-type dropdown)
+
+> **Blink and you'll miss it.** The shopper starts typing — and the right products are already
+> sitting there, images, prices and all. Faster than they can finish the word.
+
+An **Algolia-style autocomplete dropdown** on the header search box: as the shopper types, a
+debounced AJAX call returns product cards (image, name, price, in-stock) **and** matching category
+suggestions, rendered instantly with keyboard navigation. Results come from OpenSearch — relevance
+from the analyzed fulltext index, display data hydrated from the serving index in one `mget` — so
+suggestions appear in milliseconds and every keystroke aborts the previous request. Endpoint:
+`/fastmagento/search/suggest`.
+
+## Feature: Instant search results page (live SERP, no reload)
+
+> **A search results page that never reloads. On Magento.** Read that again. We'll give you a
+> second.
+
+The search results page is a **fully live SERP**: the product grid and pagination re-render in
+place from OpenSearch with **no page reload** as the shopper types or pages, and the URL updates via
+`history.replaceState` (shareable, back-button friendly). It replaces Magento's native
+server-rendered search results outright and returns hits in milliseconds. Endpoint:
+`/fastmagento/search/instant`.
+
+## Feature: Live layered navigation on search (instant "Shop By")
+
+> **Tick a filter. Watch the entire page rearrange itself. No reload.** Facet counts, grid,
+> pagination — all instant. Your customers will think you rebuilt the store in React.
+
+The **layered-navigation "Shop By" facets on the search page update live** — tick a filter and the
+grid, pagination and facet counts all re-render in place from OpenSearch aggregations, no page
+reload. Facet option **labels come straight from the index** (no DB/EAV lookup on the request
+path), and the native Magento layered nav is replaced outright. Configure which attributes become
+facets via `FastMagento > Search > Facet Attributes`.
+
+## Feature: Fast Checkout — no more 30× inventory loops
+
+> **Imagine a Magento where your customers aren't punished for adding *more* to their cart — or for
+> you offering richer sales-rule flexibility.** Our cart paints the DOM in **under a second whether
+> there's 1 item or 20 highly-configured products** — something natively impossible in Magento
+> without slowing checkout to a crawl.
+
+Here's why native Magento *does* punish a full cart: it hydrates each line from a ~217-query product
+collection (EAV ≈119 + MSI stock ≈71 + downloadable ≈27) and re-checks salable quantity ~30 times
+per line on add-to-cart **and** again on cart load — so every extra item, every extra configurable
+variant, and every extra sales/catalog rule piles on more work. Cost grows with the size and
+complexity of the cart, exactly when the shopper is closest to buying.
+
+**Fast Checkout** (on by default) serves those line products — including configurable variants —
+from the index and drops the redundant revalidation, so cart/checkout render is **flat regardless
+of cart size** (a realistic 7-item cart goes from ~4 s to ~0.4 s; a 20-line highly-configured cart
+stays under a second). One master toggle turns on the whole fast pipeline (OS-serve + optimistic
+stock + fast stock sync); order placement still gates stock by SKU so it **cannot oversell**, and
+anything not fully in the index falls back to native automatically.
+
+## Feature: Real-time stock & price sync
+
+> **Sell it, refund it, restock it — the index already knows.** Updates land in OpenSearch *before
+> the response even finishes*, so your storefront is never stale and the shopper never waits.
+
+Order placement, refunds/returns and MSI inventory-API writes reproject the affected products (and
+their configurable/grouped/bundle parents) into the index immediately — **after
+`fastcgi_finish_request`, so the shopper never waits** — keeping quantity and in-stock status live
+between reindexes. **Fast stock sync** patches only the stock fields via one `mget` + bulk update
+instead of a full EAV reprojection. Catalog-rule recalculations (rule save / nightly apply-all)
+patch per-group rule prices into the docs automatically, so the OS-served cart is correct with **no
+manual reindex**.
+
+## Feature: Paginated attribute options — manage 50,000+ options without crashing
+
+> **The one screen that made Magento give up.** 50,000 color options used to *hang* the attribute
+> page. Now it opens instantly, you search by name or ID, and every edit saves a single row. The
+> impossible admin page — solved.
+
+**Keywords: Magento paginated attribute options, attribute option pagination, manage thousands of
+swatch options, 50k color attribute.** A well-known Magento 2 shortcoming: the product-attribute
+**Manage Options** grid (and the swatch variants) renders and re-serialises the **entire** option
+set on one page. Past a few thousand options the attribute-edit page slows to a crawl or crashes
+outright — a hard blocker for large apparel/lingerie catalogs where a single color attribute can
+carry **tens of thousands** of combinations.
+
+FastMagento replaces that screen with a **paginated option manager**:
+
+- **Loads one page at a time** (AJAX) — the edit page opens instantly even at 50,000 options.
+- **AJAX search by name or ID** — find one specific option among 50k to edit or delete.
+- **Single-row writes** — add / edit / delete is one AJAX call touching only that option's rows;
+  the whole set is never rewritten. A guard plugin stops the native "save the whole array" path
+  from ever running, so a Save Attribute click can't wipe your options.
+- **Every option type** — dropdown, multiple-select, visual swatch (color/image), text swatch.
+- **"Assigned to a product" column + filter** — see at a glance which options are actually used, and
+  filter to **Any / Yes / No**. On the 50k `color` attribute this instantly surfaces the **23,201
+  unused** options.
+- **Bulk delete** — check rows and delete the selection, or **"Delete All Matching"** to remove the
+  entire filtered set across all pages in one action (chunked). Cleaning out *thousands* of dead
+  options — filter → Unassigned → delete — is one click; the confirm warns if any are still in use.
+
+On by default. See [Admin: paginated attribute options](#admin-paginated-attribute-options-large-catalog-fix)
+for details.
+
+## Feature: Option labels served from OpenSearch (no MySQL on the hot path)
+
+Every select/multiselect **option label** (PDP "Additional Information", layered-nav **Shop By**
+facets, swatches, search) is projected into an OpenSearch **option dictionary** and served from it,
+so a served page resolves labels with **zero `eav_attribute_option` MySQL reads** — dropping the
+residual per-page option lookups to **0** on PDP, PLP and search. Native fallback on any miss.
+
+## Feature: Read-path resilience & fallback
+
+*Warm-on-miss* (a product missing from the index is loaded natively once, projected, then served
+from OpenSearch thereafter — self-healing like a cache miss) and automatic native fallback whenever
+OpenSearch is unavailable. Serving happens beneath Full-Page-Cache and Varnish, so it is
+cache-transparent.
+
+## Feature: Faster admin on the same hardware
+
+> **But wait… there's more!** 📺 Move the storefront off MySQL and your **admin gets faster too** —
+> imports, indexers, order processing, all of it — on the *exact same hardware*. That's not an
+> add-on. That's a free bonus you didn't even ask for.
+
+A quiet but real win: because the **frontend no longer hammers MySQL** for product/EAV/price/stock
+reads (that work now lands on OpenSearch), the database and PHP-FPM pool spend far less time serving
+storefront traffic — so the **Magento admin, imports, indexers and integrations get noticeably
+faster on the exact same hardware**. The frontend and the back office stop fighting over the same
+database. No extra servers, no config: it's a side effect of moving the heavy read path off MySQL.
+
+## Feature: Per-customer-group & B2B pricing served from the index
+
+Catalog price rules, tier prices and special prices are indexed **per customer group** and served
+straight from the document on PDP, PLP, cart and checkout — so a store with many customer groups
+(guest, wholesale, retailer, VIP…) resolves the right price with **no per-child, per-group SQL
+lookup**. This is what kills the classic per-child `catalogrule_product_price` + tier-price N+1 on a
+big configurable, and keeps B2B pricing fast at scale.
+
+## Feature: Drop-in & third-party transparent (base Magento only)
+
+> **No core hacks. No ripped-out modules. And no Hyvä or Breeze required.** It's all backend —
+> pair it with a fast theme for a real banger, or run it on stock Luma and still fly. Turn any
+> piece off and it falls straight back to native. Your extensions never even notice.
+
+FastMagento runs on **base Magento** — no core patches. Because every read returns a **real
+`Magento\Catalog\Model\Product` / `Category` object** (just hydrated from OpenSearch instead of the
+DB), third-party extensions, SEO modules, themes and page builders keep working unchanged. It sits
+beneath Full-Page-Cache / Varnish, and any feature can be toggled off to fall straight back to
+native behaviour. Adopt it incrementally.
 
 ---
 
@@ -230,11 +541,54 @@ once, pushed to the index, then served from OpenSearch thereafter.
 
 ---
 
-## AI-powered search relevance
+## AI-powered search relevance (search so good it's almost unfair)
 
-Instant search is tuned to behave like Algolia/Sphinx on a real catalogue, and it self-optimises
-from your own content. The goal: **install the extension, run the AI mapping tool, and get the
-best possible search with almost no hand-tuning.**
+We'll say it: **on a real, messy catalog this is a better search experience than most billion-dollar
+storefronts** — because it doesn't just index your words, it *learns your catalog's language* with
+AI and tunes itself. Install the extension, add a Claude API key, run the AI mapping tool once, and
+get near-best-possible search with almost no hand-tuning.
+
+The AI reads **your own content** — attribute labels, category names and a sample of product names —
+and builds the language layer for you:
+
+- **AI synonym & thesaurus discovery from your content** — finds the equivalents shoppers actually
+  type and folds them into the thesaurus (e.g. it learns `front end ↔ frontend`, `rear end ↔ back
+  end`, `u-bolt ↔ ubolt`, `rock racer ↔ rockracer` straight from your product names). No hand-curation.
+- **AI per-product keyword discovery** — fills a hidden `fm_search_keywords` field per product with
+  the buyer terms and aliases your copy never mentions (UTV ↔ side-by-side ↔ SxS, brand/fitment
+  nicknames), so the right product surfaces for words that aren't on the page.
+- **Grammatical & compound-word variants** — spacing/hyphenation/plural pairs (`t-shirt ↔ tshirt ↔
+  tee`) discovered automatically, with a guardrail against building groups around common words.
+- **Similar words & misspellings** — typo tolerance plus AI-discovered misspelling/variant pairs, so
+  a fat-fingered query still lands.
+- **Smart stop words & exceptions** — stop words are stripped for recall but preserved where they
+  matter (a phrase like "side by side" survives instead of collapsing to "side").
+- **Symmetric synonyms** — a term and its synonyms are scored as true equals, so `frontend` and
+  `front end` (or `sxs` and `utv`) return **identical** results in the same order.
+
+Everything below is the ranking engine those AI layers feed into.
+
+### Real search wins (across niches)
+
+Native Magento treats each of the left-hand queries as a *different word* and returns junk (or
+nothing). FastMagento learns they're the same thing — from your own catalog — and returns the right
+products, ranked the same either way:
+
+| A shopper types… | Native Magento | FastMagento (AI-learned) | Niche |
+|---|---|---|---|
+| `frontend` vs `front end` | different results / 1 hit | **identical** results | off-road / auto |
+| `top end` vs `top-end` | split, inconsistent | **identical** — same engine parts | performance auto |
+| `side by side` / `sxs` | matches the word "side" | **UTV / side-by-side rigs** | powersports |
+| `t-shirt` / `tshirt` / `tee` | three different result sets | **one** result set | apparel |
+| `34E` / `34DD` | miss | **same cup size** surfaced | lingerie |
+| `ebike` / `e-bike` / `electric bike` | split | **identical** | cycling |
+| `usb-c` / `usb c` / `type-c` | split | **identical** | electronics |
+| `allen key` / `hex key` / `allen wrench` | miss | **same tool** | hardware / tools |
+| `a-arm` / `control arm` | miss | **same suspension part** | off-road |
+| `u-bolt` / `ubolt` | split | **identical** | trailer / auto |
+
+The magic: you don't type any of these in by hand. The **AI discovers them from *your* products**,
+so the wins match *your* niche — whatever you sell.
 
 ### Relevance engine
 
@@ -295,6 +649,37 @@ not guessed:
 php app/code/ParkkTech/FastMagento/docs/tools/search-relevance.php            # golden-queries.json
 php app/code/ParkkTech/FastMagento/docs/tools/search-relevance.php "front end" "sxs"
 ```
+
+---
+
+## Admin: paginated attribute options (large-catalog fix)
+
+A well-known Magento 2 shortcoming: the product-attribute **Manage Options** grid (and the swatch
+variants) renders **every** option on the page and re-serialises the whole set on save. Past a few
+thousand options the attribute-edit page slows to a crawl or crashes outright — a hard blocker for
+large apparel/lingerie catalogues where a single colour attribute can carry **tens of thousands**
+of combinations (solids, two-colour patterns, prints).
+
+FastMagento replaces that screen with a **paginated option manager**:
+
+- **Loads one page at a time** (AJAX) — the edit page opens instantly even at 50,000 options,
+  instead of materialising the entire array into the DOM.
+- **Search** across option labels, server-side (bounded query).
+- **Single-row writes** — adding, editing or deleting an option is one AJAX call that touches only
+  that option's rows (`eav_attribute_option` + per-store value + swatch), never the whole set. A
+  guard plugin also stops the native "save the whole array" path from ever running, so a Save
+  Attribute click can't wipe or overwrite the option set.
+- **All option types** — dropdown, multiple-select, visual swatch (colour/image) and text swatch.
+- **"Assigned to a product" column + filter** — each row shows whether the option is used by any
+  product (resolved efficiently from the product's backend table — `int`/`varchar`/`text`, so it is
+  correct for select *and* multiselect). Filter the grid to **Any / Yes / No** to see exactly which
+  options are dead weight (on the stress catalog's 50k `color`, that's **23,201 unused**).
+- **Bulk delete** — a checkbox column with select-all-on-page and **Delete Selected**, plus
+  **Delete All Matching** which removes the *entire* filtered set across all pages in one chunked
+  action (so filter → **Assigned: No** → delete clears thousands of unused options at once). Both
+  confirm with a count; if the set still includes in-use options the confirm warns before deleting.
+
+On by default (`FastMagento > … attribute_pagination/enabled`); no configuration needed.
 
 ---
 
@@ -581,10 +966,12 @@ curl -s "http://localhost:9200/magento2_products/_mapping?pretty"
 - Grouped and bundle read paths are indexed but not yet fully exercised for add-to-cart.
 - The serving index projects the **default store view**; per-store serving is tracked
   separately for multi-store setups.
-- **Search facets** cover **single-select** attributes today; multi-select attributes
-  (e.g. Compatible Platforms) are deferred — the native fulltext index sorts a doc's option-id
-  and option-label arrays independently, so an id can't be mapped to its label from OpenSearch
-  alone. A per-attribute option dictionary in the index would close this.
+- **Storefront layered-nav & PDP option labels** (select **and** multiselect) are now served from
+  the OpenSearch **option dictionary** (`fastmagento_attribute_option`), so Shop By / Additional
+  Information resolve labels with 0 MySQL. The **instant search-results-page facets** still read the
+  native fulltext index for buckets, where a doc's option-id and option-label arrays sort
+  independently — extending those facets to read the same dictionary is the remaining step to full
+  multi-select facet labels on the live SERP.
 - **Fast Checkout** is **on by default** but changes checkout stock behaviour (optimistic stock
   relies on the placement-time SKU gate), so validate it with a real order — guest + a logged-in
   group, plus a deliberately over-qty line — after go-live; it also assumes a fresh price/rule
