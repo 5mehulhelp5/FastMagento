@@ -23,6 +23,20 @@ and every change is pushed into OpenSearch **in real time**. Reads stay transpar
 code (a real `Magento\Catalog\Model\Product` / `Category` object is hydrated from the index), it
 runs on **base Magento only**, and it is **Full-Page-Cache / Varnish safe**.
 
+## 🚀 Quick install
+
+```bash
+composer require parkktech/fastmagento
+bin/magento module:enable ParkkTech_FastMagento
+bin/magento setup:upgrade
+bin/magento setup:di:compile        # production mode only
+bin/magento cache:flush
+bin/magento indexer:reindex fastmagento_product fastmagento_category
+```
+
+**Requirements:** Magento 2.4.6+, PHP 8.1+, and a configured OpenSearch/Elasticsearch engine.
+Full options (VCS install before Packagist, manual install, per-indexer notes) → [**Installation**](#installation).
+
 ## Why it exists (the honest origin story)
 
 It started as one simple goal: **make Magento faster**. Then we tried to run a real store on it — a
@@ -139,40 +153,42 @@ query reductions but feels less wall-clock benefit (see the note under Benchmark
 > **4,187 configurables**, a **50,000-option** color attribute, every bra/apparel size) in an
 > isolated database. **Apples-to-apples**: the module is fully **disabled** (`module:disable`, real
 > native MySQL) vs **enabled**, replaying the *same* URLs and the *same* 10-configured-item cart.
-> **Cold render** (Full-Page-Cache disabled) — the honest comparison, because on an FPC *hit* both
-> states serve identical cached HTML. The store runs its real third-party stack (Webkul
+> **Cold render** (every request a unique URL → Full-Page-Cache *miss*, median of 3) — the honest
+> comparison, because on an FPC *hit* both states serve identical cached HTML. Cart/checkout use the
+> REST totals endpoints (never FPC-cached). The store runs its real third-party stack (Webkul
 > Marketplace, Stripe, …) on every page in **both** columns.
 
 **Page load / render time @ 500k products (cold render)**
 
 | Surface | Without (native) | With FastMagento | Speed-up |
 |---|---:|---:|---:|
-| Home / CMS | 893 ms | **553 ms** | **1.6×** |
-| PDP · simple | 546 ms | 536 ms | ~1× |
-| PDP · configurable (660-variant) | 1,354 ms | **918 ms** | **1.5×** |
-| Category / PLP | 560 ms | 593 ms | ~1× |
-| Search results (SERP) | 1,720 ms | **714 ms** | **2.4×** |
-| Cart · collectTotals (10 configured) | 543 ms | **117 ms** | **4.6×** |
-| Checkout · `totals-information` | 1,636 ms | **1,118 ms** | **1.5×** |
+| Home / CMS | 2,911 ms | **775 ms** | **3.8×** |
+| PDP · simple | 555 ms | **480 ms** | 1.2× |
+| PDP · configurable (660-variant) | 1,371 ms | **827 ms** | **1.7×** |
+| Category / PLP | 543 ms | 622 ms | ~1× |
+| Search results (SERP) | 631 ms | **338 ms** | **1.9×** |
+| Cart · collectTotals (10 configured) | 1,485 ms | **1,009 ms** | **1.5×** |
+| Checkout · `totals-information` | 1,510 ms | **1,110 ms** | **1.4×** |
 
 **SQL queries per cold render @ 500k products** — the scale-invariant metric:
 
 | Surface | Without (native) | With FastMagento | Reduction |
 |---|---:|---:|---:|
-| Home / CMS | 5,734 | **116** | **−98%** |
-| PDP · simple | 822 | 540 | −34% |
-| PDP · configurable | 774 | 494 | −36% |
-| Category / PLP | 484 | 256 | −47% |
-| Search results | 610 | **48** | **−92%** |
-| Cart · collectTotals (10 configured) | 1,683 | **141** | **−92%** |
-| Checkout · `totals-information` | 2,688 | 654 | −76% |
+| Home / CMS | 10,090 | **80** | **−99%** |
+| PDP · simple | 413 | 256 | −38% |
+| PDP · configurable | 388 | 231 | −40% |
+| Category / PLP | 246 | 131 | −47% |
+| Search results | 220 | **23** | **−90%** |
+| Cart · collectTotals (10 configured) | 1,210 | **265** | **−78%** |
+| Checkout · `totals-information` | 1,250 | **295** | **−76%** |
 
 > **How to read it (honestly).** The **query-count collapse is the headline** — the homepage alone
-> goes **5,734 → 116** queries, and the never-cached cart/checkout path drops **~12×**. Wall-clock
-> wins are biggest where data-loading is the bottleneck (home, search, configurable PDP, cart);
-> it's roughly flat on light pages (simple PDP, small category) because there the time is dominated
-> by PHP rendering + third-party modules (**Webkul Marketplace alone fires ~180 queries/PDP**),
-> which are identical in both columns. On a production DB (millions of EAV rows, 1–5 ms/query,
+> goes **10,090 → 80** queries (**~126×**), and the never-cached cart/checkout path drops **~4–5×**
+> (1,210 → 265). Wall-clock wins are biggest where data-loading is the bottleneck (home, search,
+> configurable PDP, cart); it's roughly flat on light pages (simple PDP) and can even be a hair
+> slower on a small category, because there the time is dominated by PHP rendering + third-party
+> modules (**Webkul Marketplace alone fires ~180 queries/PDP**) — identical in both columns — and the
+> OpenSearch round-trip adds a few ms. On a production DB (millions of EAV rows, 1–5 ms/query,
 > networked/replicated) that same query collapse is **seconds** of latency and a large drop in DB
 > load. The design goal — **product/EAV SQL stays flat as the catalog grows** — holds; native does
 > not. These page-time figures are **server response (TTFB-class)**; the real *browser* gap is
@@ -197,6 +213,35 @@ query reductions but feels less wall-clock benefit (see the note under Benchmark
 | Attribute-edit page (50k-option `color`) | **crashes / hangs** | **opens instantly** (paginated, 50/page) |
 
 <p align="center"><img src="docs/img/demo-attribute-manager.gif" alt="Paginated attribute-option manager on a 50,000-option attribute" width="100%"/></p>
+
+---
+
+## 🔎 Extension Efficiency Monitor — find *which* extension is slowing you down
+
+Third-party extensions don't advertise their cost. FastMagento's **Extension Efficiency Monitor**
+(Admin → *FastMagento → Extension Efficiency*) profiles a real page render — data loads, full
+**PDP / category / search** HTML, **and the checkout totals** path — then attributes **every SQL
+query to the extension that fired it**. It answers the question every store owner actually has:
+*"which app is making my store slow, and where do I tell my developer to look?"*
+
+The headline is the **N+1 hotspot table** — a developer can read one row and know exactly where to
+go: **Extension · Page · Class::Method · Loops · Table**. On this 500k-product store with its real
+third-party stack it surfaces, automatically:
+
+| Extension | Page | Class :: Method | Loops | Table |
+|---|---|---|---:|---|
+| Webkul Marketplace | PDP | `Data::getSellerCollectionObj` | **×87** | `marketplace_userdata` |
+| Webkul Marketplace | PDP | `SellerIdAttribute::getAllOptions` | ×84 | `marketplace_userdata` |
+| Mageplaza Productslider | Home | `AbstractSlider::getProductParentIds` | ×11 | `sales_bestsellers…` |
+| Jadog StructuredData | PDP | `BreadcrumbSchema::bestCategory` | ×9 | `catalog_category_entity` |
+| StripeIntegration Payments | Checkout | `Product::getProduct` | ×4 | `catalog_product_entity` |
+
+Plus **at-a-glance customer-experience load times** per page (Home / PDP / PLP / Search / Checkout,
+colour-coded), a per-hot-path **core-vs-extension query "tax"** chart, and a severity-ranked table of
+every extension's total database overhead. Run it on demand, on a schedule (cron), or from the CLI
+(`bin/magento fastmagento:efficiency:scan`). **It works for any extension** — no per-extension config.
+
+<p align="center"><img src="docs/img/demo-efficiency-monitor.png" alt="Extension Efficiency Monitor — N+1 hotspots, load times, and per-extension database overhead" width="100%"/></p>
 
 > The reference numbers below are from a mid-sized (~14.6k-product) catalog; the 500k tables above
 > are the headline "does it hold at scale" proof.
@@ -468,6 +513,24 @@ facets, swatches, search) is projected into an OpenSearch **option dictionary** 
 so a served page resolves labels with **zero `eav_attribute_option` MySQL reads** — dropping the
 residual per-page option lookups to **0** on PDP, PLP and search. Native fallback on any miss.
 
+## Feature: Fast, non-blocking reindex
+
+> **Reindex a 500k catalog in minutes, and never take the store down doing it.** ⚡
+
+The product indexer is **set-based and batched**: it loads each chunk of products in one pass
+instead of one `getById()` per product, so it **doesn't drag every installed third-party module
+through a per-product load** (a single mis-behaving extension can otherwise add millions of wasted
+queries to a reindex) and it builds each OpenSearch document from explicit batched queries. On a
+**500,000-product** catalog this cut a full reindex from **~2.6 hours to ~50 minutes (≈3× overall,
+and ~8× on the simple-product volume)** — with **no extra hardware and no parallelization** (which
+would just fight the app server for CPU); it's simply less work per product.
+
+**Products never disappear while it's reindexing.** Search and product pages keep serving throughout
+a rebuild: any product not yet in the (rebuilding) serving index is **loaded natively once and
+read-through-indexed on the spot** (*warm-on-miss*), so a shopper never sees an empty results grid or
+a missing PDP mid-reindex — the store stays fully live from the first second of the rebuild to the
+last.
+
 ## Feature: Read-path resilience & fallback
 
 *Warm-on-miss* (a product missing from the index is loaded natively once, projected, then served
@@ -506,6 +569,17 @@ FastMagento runs on **base Magento** — no core patches. Because every read ret
 DB), third-party extensions, SEO modules, themes and page builders keep working unchanged. It sits
 beneath Full-Page-Cache / Varnish, and any feature can be toggled off to fall straight back to
 native behaviour. Adopt it incrementally.
+
+### Breeze (Swissup) compatible
+
+The bulk of FastMagento is backend, so it's theme-agnostic. Its only storefront JavaScript — the
+as-you-type **autocomplete** and the live **instant-search** results page — is plain jQuery
+bootstrapped through `text/x-magento-init` / `data-mage-init`, with **no Knockout, jQuery-UI, or
+`mage/*` widget dependencies**. That's the ideal shape for [Breeze](https://breezefront.com)'s
+**Better Compatibility** mode: `view/frontend/layout/breeze_default.xml` registers the module so
+Breeze reuses the exact same `web/js` files and `requirejs-config.js` aliases and runs them with real
+jQuery — nothing is forked into a `js/breeze/` bundle. On **native Luma** the `breeze_default` handle
+never fires, so that file is inert and the RequireJS path is untouched. **One codebase, both stacks.**
 
 ---
 
@@ -694,16 +768,44 @@ On by default (`FastMagento > … attribute_pagination/enabled`); no configurati
 
 ## Installation
 
+**Requirements:** Magento 2.4.6+ (Open Source or Commerce), PHP 8.1+, and a configured
+**OpenSearch** (or Elasticsearch) search engine — the same engine Magento already uses for catalog
+search. No Hyvä/Breeze required; works on base Luma or any theme.
+
 **Composer (recommended)**
 ```bash
 composer require parkktech/fastmagento
+```
+Published on [Packagist](https://packagist.org/packages/parkktech/fastmagento) — the one-liner
+pulls the latest release tag. Pin a version with `parkktech/fastmagento:^1.0`, or track the tip of
+development with `parkktech/fastmagento:dev-master`.
+
+<details>
+<summary>Installing before it appears on Packagist, or from a fork</summary>
+
+The package lives at [github.com/parkktech/FastMagento](https://github.com/parkktech/FastMagento)
+(public). Add it as a VCS repository, then require it:
+```bash
+composer config repositories.parkktech-fastmagento vcs https://github.com/parkktech/FastMagento.git
+composer require parkktech/fastmagento
+```
+</details>
+
+**Then, either install path:**
+```bash
 bin/magento module:enable ParkkTech_FastMagento
 bin/magento setup:upgrade
-bin/magento setup:di:compile      # production mode
+bin/magento setup:di:compile      # production mode only
 bin/magento cache:flush
 ```
 
-**Manual**
+> ⚡ `setup:upgrade` also **auto-installs large-catalog performance indexes** (declarative schema,
+> `etc/db_schema.xml`) — composite `(attribute_id, store_id, value)` indexes on the EAV value
+> tables Magento leaves unindexed (`_varchar`, `_decimal`, `_datetime`). On a 500k catalog these
+> turn an attribute-value filter from a **571,866-row scan into a 1-row seek** (layered navigation,
+> attribute filters, admin grids). No manual SQL, and they're removed cleanly if you uninstall.
+
+**Manual (no Composer)**
 ```bash
 mkdir -p app/code/ParkkTech/FastMagento
 cp -R <module-source>/* app/code/ParkkTech/FastMagento/
