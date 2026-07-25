@@ -6,6 +6,14 @@
             <indexing>
                 <opensearch_index_prefix>products</opensearch_index_prefix>
                 <opensearch_category_index_prefix>categories</opensearch_category_index_prefix>
+                <!-- Instant product update. Default OFF (opt-in): on a product save, immediately
+                     reproject that product (+ composite parents) into OpenSearch and purge its
+                     full-page cache, bypassing the scheduled indexer + FPC lag so staff see edits
+                     live. Adds a reprojection + cache purge to every product save. -->
+                <instant_product_update>0</instant_product_update>
+                <!-- When instant update purges the cache, also purge the product's category pages
+                     (not just its own page). Default ON. -->
+                <instant_purge_categories>1</instant_purge_categories>
             </indexing>
             <search>
                 <!-- Attribute facets shown on the instant search results page (comma-separated

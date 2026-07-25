@@ -34,6 +34,26 @@ class OpenSearchConfig extends AbstractHelper
     }
 
     /**
+     * Instant product update: on a product save, immediately reproject that product (and any
+     * composite parents) into OpenSearch AND purge its full-page cache, bypassing the scheduled
+     * indexer + cache lag so staff see catalogue edits live. Off by default (opt-in): it adds a
+     * reprojection + cache purge to every product save.
+     */
+    public function isInstantProductUpdateEnabled(): bool
+    {
+        return $this->scopeConfig->isSetFlag('fastmagento/indexing/instant_product_update');
+    }
+
+    /**
+     * When instant update purges the cache, also purge the saved product's category pages
+     * (so category listings reflect the edit too, not just the product page). Default on.
+     */
+    public function isInstantPurgeCategoriesEnabled(): bool
+    {
+        return $this->scopeConfig->isSetFlag('fastmagento/indexing/instant_purge_categories');
+    }
+
+    /**
      * ✅ Get OpenSearch Index Name from Configuration.
      */
     public function getIndexName(): string

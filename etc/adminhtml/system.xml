@@ -34,6 +34,19 @@
                     <label>Category Index Suffix</label>
                     <comment>Suffix for the FastMagento category index. Default "categories".</comment>
                 </field>
+
+                <field id="instant_product_update" translate="label comment" type="select" sortOrder="50" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Instant Product Update on Save</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment><![CDATA[When on, saving a product <strong>immediately</strong> reprojects it (and any configurable/grouped/bundle parent) into OpenSearch and purges its full-page cache — so staff see the change on the storefront at once, without waiting for the scheduled indexer or cache to catch up. Best-effort: a failure is logged and never blocks the save. <em>Adds a reprojection + cache purge to every product save (including mass actions and imports)</em>, so it's off by default.]]></comment>
+                </field>
+
+                <field id="instant_purge_categories" translate="label comment" type="select" sortOrder="60" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Also Purge Category Pages</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <depends><field id="instant_product_update">1</field></depends>
+                    <comment>When Instant Product Update purges the cache, also purge the pages of the categories the product belongs to (so category listings reflect the edit, not just the product page). Default Yes.</comment>
+                </field>
             </group>
 
             <!-- Instant Search + Relevance -->

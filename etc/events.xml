@@ -16,6 +16,14 @@
         <observer name="fastmagento_reindex_on_creditmemo"
                   instance="ParkkTech\FastMagento\Observer\ReindexOnCreditmemo"/>
     </event>
+    <!-- Instant product update: once a product save COMMITS, reproject it into OpenSearch and purge
+         its full-page cache right away (bypassing the scheduled indexer + FPC lag) so staff see
+         catalogue edits live. Commit-after (not save-after) so a rolled-back save never leaves the
+         index/cache ahead of the DB. Gated by fastmagento/indexing/instant_product_update (off by default). -->
+    <event name="catalog_product_save_commit_after">
+        <observer name="fastmagento_instant_update_on_save"
+                  instance="ParkkTech\FastMagento\Observer\InstantUpdateOnSave"/>
+    </event>
     <!-- Remove deleted products from the OpenSearch serving index. -->
     <event name="catalog_product_delete_after">
         <observer name="fastmagento_remove_on_product_delete"
