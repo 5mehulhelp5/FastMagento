@@ -48,7 +48,8 @@ jobs:
           set -euo pipefail
           msg="$(git log -1 --pretty=%B)"
 
-          if printf '%s' "$msg" | grep -qiE '\[skip release\]|\[skip ci\]'; then
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ] \
+             && printf '%s' "$msg" | grep -qiE '\[skip release\]|\[skip ci\]'; then
             echo "skip=true" >> "$GITHUB_OUTPUT"; echo "Skip requested in commit message."; exit 0
           fi
           if git describe --exact-match --tags HEAD >/dev/null 2>&1; then
