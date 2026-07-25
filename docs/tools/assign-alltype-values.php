@@ -2,7 +2,7 @@
 use Magento\Framework\App\Bootstrap;
 use Magento\Catalog\Model\Product;
 
-require '/var/www/html/diyoffroad/app/bootstrap.php';
+require __DIR__ . '/../../../../../../app/bootstrap.php';
 $bootstrap = Bootstrap::create(BP, $_SERVER);
 $om = $bootstrap->getObjectManager();
 $om->get(\Magento\Framework\App\State::class)->setAreaCode('adminhtml');

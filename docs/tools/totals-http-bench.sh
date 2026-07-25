@@ -3,7 +3,7 @@
 # Builds a guest cart once, then times totals-information N times (median).
 # Usage: totals-http-bench.sh [label] [N] [sku] [qty]
 set -u
-HOST="www.diyoffroad.loc"
+HOST="${MAGE_HOST:-magento.test}"
 BASE="http://127.0.0.1"
 LABEL="${1:-run}"
 N="${2:-25}"

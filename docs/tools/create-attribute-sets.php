@@ -1,6 +1,6 @@
 <?php
 use Magento\Framework\App\Bootstrap; use Magento\Catalog\Model\Product;
-require '/var/www/html/diyoffroad/app/bootstrap.php';
+require __DIR__ . '/../../../../../../app/bootstrap.php';
 $b=Bootstrap::create(BP,$_SERVER); $om=$b->getObjectManager();
 $om->get(\Magento\Framework\App\State::class)->setAreaCode('adminhtml');
 $eav=$om->get(\Magento\Eav\Setup\EavSetupFactory::class)->create();

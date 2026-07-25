@@ -15,8 +15,8 @@
 # classes that fired SQL (from the stack traces) — so you know exactly what to extend.
 
 set -euo pipefail
-ROOT=/var/www/html/diyoffroad
-HOST=www.diyoffroad.loc
+ROOT="${MAGE_ROOT:-/var/www/html/magento}"
+HOST="${MAGE_HOST:-magento.test}"
 LOG="$ROOT/var/debug/db.log"
 CMD="${1:-}"
 

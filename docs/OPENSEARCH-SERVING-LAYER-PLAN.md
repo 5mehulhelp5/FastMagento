@@ -5,7 +5,7 @@
 > layer are built. The main outstanding phase is **server-side OS-serving of the category/PLP
 > product grid** (membership + layered-nav facets), which is next. For the accurate as-built
 > architecture and current status see **`docs/ARCHITECTURE.md`** (§9 lists what's done vs. next);
-> `docs/RESUME.md` is the current-state entry point. This plan is retained for design rationale.
+> This plan is retained for design rationale.
 
 > Scoped roadmap to finish `ParkkTech_FastMagento`: make OpenSearch the sole
 > read/serving layer for products, categories, search and layered navigation,
@@ -414,7 +414,7 @@ downloadable; (5) admin configuration (facet grid + autocomplete settings, reuse
 native config); (6) harden+verify(zero product SQL, Varnish-safe)+observability+
 security+benchmarks+package+release.
 
-Test site: local diyoffroad (prod DB clone, OpenSearch on :9200, developer mode;
+Test site: a local Magento install (OpenSearch on :9200, developer mode;
 fastmagento_product index already builds 1383 docs on base Magento). Verify with DB
 query logger — target zero product SQL on PDP/PLP/search, and confirm pages stay
 Varnish/FPC cache hits.

@@ -11,10 +11,10 @@ declare(strict_types=1);
  * tens of thousands of colour options and every known size.
  *
  * SAFETY: refuses to run against any database whose name does not contain "scale" (so it can
- * never touch the live diyprod_db). Reads DB creds from app/etc/env.php, overriding the dbname.
+ * never touch the live your production DB). Reads DB creds from app/etc/env.php, overriding the dbname.
  *
  *   php scale-catalog.php [--products=500000] [--colors=50000] [--children-per-config=120]
- *                         [--db=diyscale_db] [--template=4369] [--reset]
+ *                         [--db=magento_scale] [--template=4369] [--reset]
  *
  * Resumable: products are keyed by a SCALE-<n> SKU prefix; a re-run continues from the highest n.
  * --reset first deletes every previously generated SCALE-* product (leaves attribute options).
@@ -24,7 +24,7 @@ $opt = getopt('', ['products::', 'colors::', 'children-per-config::', 'db::', 't
 $TARGET_PRODUCTS = (int) ($opt['products'] ?? 500000);
 $TARGET_COLORS   = (int) ($opt['colors'] ?? 50000);
 $CHILDREN        = max(2, (int) ($opt['children-per-config'] ?? 120));
-$DBNAME          = (string) ($opt['db'] ?? 'diyscale_db');
+$DBNAME          = (string) ($opt['db'] ?? 'magento_scale');
 $TEMPLATE_PARENT = (int) ($opt['template'] ?? 4369);
 $RESET           = isset($opt['reset']);
 
