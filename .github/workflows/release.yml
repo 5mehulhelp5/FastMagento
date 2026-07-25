@@ -1,7 +1,8 @@
 name: Release
 
-# Continuous release: every push to master (direct commits AND merged PRs) computes the next
-# semver tag, creates the tag + a GitHub Release, and updates Packagist.
+# Continuous release: every push to master (direct commits AND merged PRs) is validated
+# (composer validate + php -l), then computes the next semver tag, creates the tag + a GitHub
+# Release, and updates Packagist. The validate job also runs on pull requests as a merge gate.
 #
 # Version bump is PATCH by default. Control it from the commit / merge-commit message:
 #   #minor  (or a Conventional "feat:")            -> minor bump
@@ -16,6 +17,7 @@ on:
   push:
     branches:
       - master
+  pull_request:
   workflow_dispatch:
     inputs:
       bump:
@@ -32,7 +34,41 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Quality gate — runs on PRs and on master. The release job below depends on it, so a
+  # syntax error or an invalid composer.json can never cut a release.
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer:v2
+          coverage: none
+
+      - name: Validate composer.json
+        run: composer validate --no-check-publish
+
+      - name: PHP syntax check (php -l on every file)
+        run: |
+          set -euo pipefail
+          fail=0
+          while IFS= read -r -d '' f; do
+            if ! php -l "$f" >/dev/null 2>&1; then
+              echo "::error file=$f::PHP syntax error"
+              php -l "$f" || true
+              fail=1
+            fi
+          done < <(find . -path ./vendor -prune -o -name '*.php' -print0)
+          if [ "$fail" -ne 0 ]; then echo "::error::PHP lint failed"; exit 1; fi
+          echo "PHP lint passed."
+
   release:
+    needs: validate
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment: PACKAGIST-PROD
     steps:
