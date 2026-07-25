@@ -1,0 +1,3 @@
+# Keep CI / repo-meta out of the Composer dist tarball.
+/.github         export-ignore
+/.gitattributes  export-ignore
