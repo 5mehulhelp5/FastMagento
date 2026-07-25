@@ -11,6 +11,30 @@
   <img alt="AI search" src="https://img.shields.io/badge/AI%20search-Claude-8A63D2"/>
 </p>
 
+<p align="center">
+  <a href="https://www.diyoffroad.com"><img alt="Live demo" src="https://img.shields.io/badge/%F0%9F%9A%80%20live%20demo-fast%20pages%20%2B%20search%20%2B%20checkout-ff2d55?style=for-the-badge"/></a>
+</p>
+<p align="center">
+  <strong>See it in production →</strong> browse, search, and add to cart on
+  <a href="https://www.diyoffroad.com"><strong>DIYoffroad.com</strong></a> —
+  <em>millisecond page loads, instant search, and add-to-cart &amp; checkout that paint immediately are all live, real-traffic demos.</em>
+</p>
+
+> [!TIP]
+> ### ⚡ Fast pages &amp; search here — pair with FastMagento Checkout for instant add-to-cart &amp; checkout
+> **FastMagento** makes your **catalog pages, category listings and search** load in milliseconds by
+> serving them from OpenSearch, and strips the heavy query cost out of the cart. For the
+> **instantly-painting add-to-cart &amp; checkout** you see on the live demo, pair it with its
+> companion module:
+>
+> 👉 **[ParkkTech FastMagento Checkout](https://github.com/parkktech/FastMagentoCheckout)** — an
+> instant, cacheable, islands-architecture checkout that paints the moment the HTML lands, keeps
+> every payment gateway working, and fails safe to stock checkout.
+>
+> ```bash
+> composer require parkktech/fastmagento-checkout
+> ```
+
 > 🐌➡️🚀 Magento 2 is powerful, extensible, and — on a big catalog — perfectly happy to run 20,000 SQL
 > queries to render a homepage and loop your inventory tables *thirty times* just because you
 > **dared** to add something to the cart. FastMagento is what happened when we got tired of
