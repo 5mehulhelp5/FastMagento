@@ -83,7 +83,13 @@
 
                 <field id="facet_attributes" translate="label comment" type="text" sortOrder="80" showInDefault="1" showInWebsite="1" showInStore="1">
                     <label>Facet Attributes</label>
-                    <comment>Comma-separated attribute codes to build search facets from (e.g. part_type,compatible_platforms). Must be filterable in the native search index. Category is always included.</comment>
+                    <comment>Comma-separated attribute codes to build search facets from (e.g. part_type,compatible_platforms). Must be filterable in the native search index. Category is always included. Codes that don't exist on your catalogue are skipped.</comment>
+                </field>
+
+                <field id="grid_columns" translate="label comment" type="text" sortOrder="85" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Results Grid Columns</label>
+                    <comment><![CDATA[Products per row on the search results grid. Set this to match your <strong>category pages'</strong> column count so search and category listings look consistent. Reduced automatically on tablet/mobile. Default 4.]]></comment>
+                    <validate>validate-number validate-digits-range 1-6</validate>
                 </field>
 
                 <field id="search_operator" translate="label comment" type="select" sortOrder="90" showInDefault="1" showInWebsite="1" showInStore="1">

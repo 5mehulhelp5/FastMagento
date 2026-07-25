@@ -177,13 +177,24 @@ so "side by side" stays intact rather than collapsing to "side side".
 
 ### Facet Attributes
 
-`fastmagento/search/facet_attributes` · Text · Default: `part_type,color,size,link_style,shock_spacing` · Store-level
+`fastmagento/search/facet_attributes` · Text · Default: *(empty)* · Store-level
 
 Comma-separated attribute codes that become the filter facets on the instant-search results page.
-Category is always included automatically.
+Category is always included automatically. Codes that don't exist on your catalogue are skipped.
 
 > Use **filterable, SELECT-type** attributes — their option labels resolve cleanly from the index.
 > Multi-select attributes aren't supported here yet (they need an indexed option dictionary).
+>
+> Ships **empty** on purpose: a catalogue-specific default would silently break facets on any
+> store lacking those exact attribute codes. Set the codes that fit your catalogue.
+
+### Results Grid Columns
+
+`fastmagento/search/grid_columns` · Text · Default: `4` · Store-level
+
+Products per row on the search results grid (1–6). Set this to match your **category pages'**
+column count so search and category listings look consistent. Reduced automatically on
+tablet (≤3) and mobile (≤2).
 
 ### Boost In-Stock Products
 

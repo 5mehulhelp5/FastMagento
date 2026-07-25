@@ -179,6 +179,21 @@ class RelevanceConfig
         return array_values(array_filter(array_map('trim', explode(',', $configured))));
     }
 
+    /**
+     * Product columns per row on the instant-search results grid. Exposed so the search grid can
+     * match the storefront's category grid instead of a CSS-hard-coded count. Clamped to 1..6;
+     * blank/invalid falls back to 4.
+     */
+    public function getGridColumns(): int
+    {
+        $raw = $this->value('grid_columns');
+        $cols = $raw === null ? 0 : (int) $raw;
+        if ($cols < 1) {
+            return 4;
+        }
+        return min(6, $cols);
+    }
+
     private function value(string $field): ?string
     {
         return $this->scopeConfig->getValue('fastmagento/search/' . $field, ScopeInterface::SCOPE_STORE);

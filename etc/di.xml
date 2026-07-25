@@ -15,11 +15,13 @@
         </arguments>
     </type>
 
-    <!-- CLI: AI search-keyword layer generation (fastmagento:search-keywords:generate). -->
+    <!-- CLI: AI search-keyword layer generation (fastmagento:search-keywords:generate) and
+         thesaurus/synonym generation (fastmagento:thesaurus:generate). -->
     <type name="Magento\Framework\Console\CommandListInterface">
         <arguments>
             <argument name="commands" xsi:type="array">
                 <item name="fastmagento_generate_search_keywords" xsi:type="object">ParkkTech\FastMagento\Console\Command\GenerateSearchKeywords</item>
+                <item name="fastmagento_generate_thesaurus" xsi:type="object">ParkkTech\FastMagento\Console\Command\GenerateThesaurus</item>
                 <item name="fastmagento_efficiency_scan" xsi:type="object">ParkkTech\FastMagento\Console\Command\EfficiencyScan</item>
                 <item name="fastmagento_efficiency_worker" xsi:type="object">ParkkTech\FastMagento\Console\Command\EfficiencyWorker</item>
             </argument>

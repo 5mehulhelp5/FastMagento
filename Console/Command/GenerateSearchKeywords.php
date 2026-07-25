@@ -73,6 +73,13 @@ class GenerateSearchKeywords extends Command
             $output->writeln('<info>Dry run</info> — no API calls, no writes.');
         }
 
+        $missing = $this->generator->getMissingSourceAttributes();
+        if ($missing) {
+            $output->writeln('<comment>Warning:</comment> these keyword source attribute codes do not exist '
+                . 'on this catalogue and will be skipped: ' . implode(', ', $missing)
+                . ' (Stores > Configuration > FastMagento > Instant Search & Relevance).');
+        }
+
         $start = microtime(true);
         $progress = function (array $event) use ($output): void {
             $output->writeln(sprintf(
@@ -91,6 +98,11 @@ class GenerateSearchKeywords extends Command
             $stats = $this->generator->run($options, $progress);
         } catch (\Throwable $e) {
             $output->writeln('<error>' . $e->getMessage() . '</error>');
+            // The root cause is invisible without the trace; show it at -v/-vv/-vvv so failures
+            // are diagnosable from the CLI instead of only reporting the top-level message.
+            if ($output->getVerbosity() >= OutputInterface::VERBOSITY_VERBOSE) {
+                $output->writeln('<comment>' . $e->getTraceAsString() . '</comment>');
+            }
             return Command::FAILURE;
         }
 

@@ -8,6 +8,7 @@ use Magento\Catalog\Model\Product;
 use Magento\Catalog\Model\Product\Attribute\Source\Status;
 use Magento\Catalog\Model\ResourceModel\Product\Action as ProductAction;
 use Magento\Catalog\Model\ResourceModel\Product\CollectionFactory as ProductCollectionFactory;
+use Magento\Eav\Model\Config as EavConfig;
 use Magento\Framework\App\Config\ScopeConfigInterface;
 use Magento\Store\Model\ScopeInterface;
 use ParkkTech\FastMagento\Helper\WriteLog;
@@ -48,7 +49,8 @@ class SearchKeywordGenerator
         private readonly AnthropicClient $client,
         private readonly AiConfig $aiConfig,
         private readonly ScopeConfigInterface $scopeConfig,
-        private readonly WriteLog $writeLog
+        private readonly WriteLog $writeLog,
+        private readonly EavConfig $eavConfig
     ) {
     }
 
@@ -68,17 +70,24 @@ class SearchKeywordGenerator
      */
     public function run(array $options = [], ?callable $progress = null): array
     {
-        if ($this->aiConfig->getApiKey() === '') {
+        $dryRun = (bool) ($options['dry_run'] ?? false);
+
+        // Preconditions are validated BEFORE any product collection is built, so a --dry-run can
+        // never reach a code path that fails on config (an unknown attribute in the select list
+        // otherwise dies deep in Collection::addAttributeToSelect with "isStatic() on false").
+        if (!$dryRun && $this->aiConfig->getApiKey() === '') {
             throw new \RuntimeException('No Claude API key is configured (FastMagento > AI Assistant).');
         }
+        $this->assertKeywordAttributeExists();
 
         // Treat a missing/0 batch as "use the default" — the CLI passes 0 when --batch is omitted.
         $batchSize = (int) ($options['batch'] ?? 0);
         $batchSize = $batchSize > 0 ? min(100, $batchSize) : self::DEFAULT_BATCH_SIZE;
         $limit = max(0, (int) ($options['limit'] ?? 0));
         $force = (bool) ($options['force'] ?? false);
-        $dryRun = (bool) ($options['dry_run'] ?? false);
-        $sourceAttributes = $this->getSourceAttributes();
+        // Only real, existing product attributes reach the collection — unknown codes from a stale
+        // facet/source config are dropped (and logged) rather than crashing the run.
+        $sourceAttributes = $this->resolveSourceAttributes();
 
         $stats = ['processed' => 0, 'updated' => 0, 'skipped' => 0, 'failed' => 0, 'batches' => 0];
         $buffer = [];
@@ -390,17 +399,86 @@ PROMPT;
     }
 
     /**
-     * Context attribute codes fed to the model: the dedicated setting, or the facet attributes
-     * as a sensible fallback (they already describe the product: part_type, fitment, etc.).
+     * Configured context attribute codes: the dedicated setting, or the facet attributes as a
+     * sensible fallback (they already describe the product: part_type, fitment, etc.). Raw — may
+     * contain codes that do not exist on this catalogue; see resolveSourceAttributes().
      *
      * @return string[]
      */
-    private function getSourceAttributes(): array
+    private function getConfiguredSourceAttributes(): array
     {
         $configured = (string) $this->scopeConfig->getValue(self::XML_SOURCE_ATTRIBUTES, ScopeInterface::SCOPE_STORE);
         if (trim($configured) === '') {
             $configured = (string) $this->scopeConfig->getValue(self::XML_FACET_ATTRIBUTES, ScopeInterface::SCOPE_STORE);
         }
         return array_values(array_filter(array_map('trim', explode(',', $configured))));
+    }
+
+    /**
+     * Configured source attributes that actually exist as product attributes. Unknown codes are
+     * dropped (and logged) so a stale facet/source config can never crash the collection build.
+     *
+     * @return string[]
+     */
+    private function resolveSourceAttributes(): array
+    {
+        $existing = [];
+        $missing = [];
+        foreach ($this->getConfiguredSourceAttributes() as $code) {
+            if ($this->attributeExists($code)) {
+                $existing[] = $code;
+            } else {
+                $missing[] = $code;
+            }
+        }
+        if ($missing) {
+            $this->writeLog->writeErrorLog(
+                '[FastMagento] keyword source attributes skipped (no such product attribute): '
+                . implode(', ', $missing)
+            );
+        }
+        return $existing;
+    }
+
+    /**
+     * Configured source attribute codes that do NOT exist on this catalogue — surfaced so the CLI
+     * can warn the operator instead of silently skipping them.
+     *
+     * @return string[]
+     */
+    public function getMissingSourceAttributes(): array
+    {
+        return array_values(array_filter(
+            $this->getConfiguredSourceAttributes(),
+            fn (string $code): bool => !$this->attributeExists($code)
+        ));
+    }
+
+    /**
+     * The keyword attribute is a hard precondition (the whole feature writes to it). Fail early
+     * with a clear, actionable message rather than mis-detecting every product as "empty".
+     */
+    private function assertKeywordAttributeExists(): void
+    {
+        if (!$this->attributeExists(AddSearchKeywordsAttribute::ATTRIBUTE_CODE)) {
+            throw new \RuntimeException(sprintf(
+                'The "%s" product attribute is missing. Run bin/magento setup:upgrade to install it '
+                . 'before generating search keywords.',
+                AddSearchKeywordsAttribute::ATTRIBUTE_CODE
+            ));
+        }
+    }
+
+    private function attributeExists(string $code): bool
+    {
+        if ($code === '') {
+            return false;
+        }
+        try {
+            $attribute = $this->eavConfig->getAttribute(Product::ENTITY, $code);
+        } catch (\Throwable $e) {
+            return false;
+        }
+        return $attribute !== null && (int) $attribute->getId() > 0;
     }
 }

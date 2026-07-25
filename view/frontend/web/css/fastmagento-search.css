@@ -85,7 +85,7 @@
 
 .fm-instant-results .fm-grid.product-items {
     display: grid !important;
-    grid-template-columns: repeat(4, 1fr) !important;
+    grid-template-columns: repeat(var(--fm-cols, 4), 1fr) !important;
     gap: 22px 20px;
     margin: 0;
     padding: 0;
@@ -126,8 +126,13 @@
 .fm-grid .stock.unavailable { color: #c00; font-size: 12px; margin-top: 4px; }
 .fm-no-results { padding: 40px 0; color: #666; font-size: 15px; }
 
-@media (max-width: 1024px) { .fm-grid.product-items { grid-template-columns: repeat(3, 1fr); } }
-@media (max-width: 640px) { .fm-grid.product-items { grid-template-columns: repeat(2, 1fr); } }
+/* Match the base rule's specificity + !important so the responsive counts actually win. */
+@media (max-width: 1024px) {
+    .fm-instant-results .fm-grid.product-items { grid-template-columns: repeat(var(--fm-cols-md, 3), 1fr) !important; }
+}
+@media (max-width: 640px) {
+    .fm-instant-results .fm-grid.product-items { grid-template-columns: repeat(var(--fm-cols-sm, 2), 1fr) !important; }
+}
 
 .fm-pagination { margin-top: 24px; display: flex; gap: 6px; flex-wrap: wrap; }
 .fm-page {

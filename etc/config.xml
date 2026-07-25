@@ -13,8 +13,15 @@
                      labels resolve cleanly from OpenSearch. Multi-select attributes are not
                      included here — their id→label pairing can't be resolved from the native
                      index alone (see InstantSearch::bucketLabel) and needs an indexed option
-                     dictionary (follow-up). Admin-overridable under FastMagento > Search. -->
-                <facet_attributes>part_type,color,size,link_style,shock_spacing</facet_attributes>
+                     dictionary (follow-up). Admin-overridable under FastMagento > Search.
+                     Empty by default: shipping catalogue-specific codes here would silently break
+                     facets (and previously the keyword generator) on any store lacking those exact
+                     attributes. Set real filterable codes for your catalogue. -->
+                <facet_attributes/>
+                <!-- Product columns per row on the search results grid. Set to match the theme's
+                     category-listing column count so search and category pages look consistent.
+                     Reduced automatically on tablet/mobile. Default 4. -->
+                <grid_columns>4</grid_columns>
                 <typo_tolerance>1</typo_tolerance>
                 <boost_in_stock>1</boost_in_stock>
                 <custom_ranking_direction>desc</custom_ranking_direction>

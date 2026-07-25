@@ -1,9 +1,14 @@
 <?php
-/** @var \Magento\Framework\View\Element\Template $block */
+/** @var \ParkkTech\FastMagento\Block\Search\InstantResults $block */
 $instantUrl = $block->getUrl('fastmagento/search/instant');
+$columns = $block->getGridColumns();
+// Cap the responsive counts so a low desktop count never grows on smaller screens.
+$columnsMd = min($columns, 3);
+$columnsSm = min($columns, 2);
 $config = ['fastmagentoInstantSearch' => ['instantUrl' => $instantUrl, 'pageSize' => 12]];
 ?>
 <div class="fm-instant-results"
+     style="--fm-cols: <?= (int) $columns ?>; --fm-cols-md: <?= (int) $columnsMd ?>; --fm-cols-sm: <?= (int) $columnsSm ?>;"
      data-mage-init='<?= $block->escapeHtmlAttr(json_encode($config)) ?>'>
     <div class="fm-results-header"><span class="fm-count">Searching…</span></div>
 </div>

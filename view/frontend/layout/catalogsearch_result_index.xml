@@ -16,7 +16,7 @@
                  grid (facets + products + pagination rendered client-side from
                  /fastmagento/search/instant). -->
             <referenceBlock name="search.result" remove="true"/>
-            <block class="Magento\Framework\View\Element\Template"
+            <block class="ParkkTech\FastMagento\Block\Search\InstantResults"
                    name="fastmagento.instant.search"
                    template="ParkkTech_FastMagento::search/instant.phtml"/>
         </referenceContainer>
