@@ -15,6 +15,21 @@
 </style>
 </head>
 <body>
+<style>
+  /* Print / PDF: single-column, light, page-break-friendly. */
+  @media print {
+    @page { margin: 14mm 12mm; }
+    :root { color-scheme: light; }
+    html, body { background: #ffffff !important; }
+    .fm-toggle, .toc { display: none !important; }
+    .layout { display: block !important; }
+    main { max-width: none !important; }
+    .card, .recipe, table, .cheat, .call { break-inside: avoid; page-break-inside: avoid; }
+    .section, h2, h3 { break-after: avoid; }
+    a { color: inherit; text-decoration: none; }
+    header, .section { box-shadow: none !important; }
+  }
+</style>
 <button class="fm-toggle" id="fmThemeToggle" aria-label="Toggle light or dark theme">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v2M12 19v2M5 12H3M21 12h-2M6 6l1.5 1.5M16.5 16.5L18 18M18 6l-1.5 1.5M7.5 16.5L6 18"/><circle cx="12" cy="12" r="4"/></svg>
   <span id="fmThemeLabel">Theme</span>
@@ -232,7 +247,8 @@
     <a href="#cart"><span class="n">4</span> Fast Checkout</a>
     <a href="#cache"><span class="n">5</span> Cache Warmup</a>
     <a href="#efficiency"><span class="n">6</span> Efficiency Monitor</a>
-    <a href="#advanced"><span class="n">7</span> Advanced (config-only)</a>
+    <a href="#credit"><span class="n">7</span> Footer Credit</a>
+    <a href="#advanced"><span class="n">8</span> Advanced (config-only)</a>
     <a href="#cheat"><span class="n">–</span> Paths &amp; CLI cheat-sheet</a>
   </nav>
 
@@ -330,6 +346,21 @@
         <span class="pathline">fastmagento/indexing/opensearch_category_index_prefix</span>
         <p class="lead">Same idea for the category index that powers menus, breadcrumbs and layered-nav attributes.</p>
         <div class="ex"><span class="lbl">Resulting index name</span><code>magento2_categories</code></div>
+      </div>
+
+      <div class="card">
+        <div class="card-top">
+          <h3>Instant Product Update on Save <span class="b b-new">v2.2.0</span></h3>
+          <div class="badges"><span class="b b-type">Yes / No</span><span class="b b-def">Default: No</span><span class="b b-scope">Store-level</span></div>
+        </div>
+        <span class="pathline">fastmagento/indexing/instant_product_update</span>
+        <p class="lead">Makes a catalogue edit go live on the storefront the <em>moment it is saved</em> — instead of waiting on the scheduled indexer and full-page cache. The classic "I saved it but I still don't see it" delay, gone.</p>
+        <div class="ex"><span class="lbl">Example</span>Merchandiser fixes a typo in a product name and clicks Save. With the FastMagento product indexer on <em>Update by Schedule</em> (a large backlog), the fix would normally not appear until the next cron reindex. With this <b>On</b>, the OpenSearch doc is updated and the product's cached pages are purged before the save even returns — the next storefront view shows the fix.</div>
+        <div class="call call-info"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg><span class="ct"><b>How it works.</b> On <code class="inl">catalog_product_save_commit_after</code> (after the DB commit, so a rolled-back save never desyncs the index), it (1) reprojects the saved product <em>and any configurable/grouped/bundle parent</em> straight into OpenSearch, bypassing the mview changelog, and (2) purges the full-page cache by dispatching Magento's own <code class="inl">clean_cache_by_tags</code> — so built-in FPC, Varnish (correctly anchored) or a CDN like Fastly each invalidate the right pages. Both halves are best-effort: a failure is logged and never blocks the save.</span></div>
+        <div class="call call-warn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l9 16H3z"/><path d="M12 9v4M12 17h.01"/></svg><span class="ct"><b>Off by default (opt-in):</b> it adds a reprojection + cache purge to <em>every</em> product save, including admin mass actions and <code class="inl">productRepository-&gt;save()</code> loops. The native CSV importer uses direct SQL and doesn't fire the event, so bulk imports are unaffected. Adds new DI — run <code class="inl">bin/magento setup:di:compile</code> on deploy.</span></div>
+        <div class="kv">
+          <div class="row"><span class="k"><b>Category pages</b> <span class="b b-new">v2.2.0</span></span><span><code class="inl">fastmagento/indexing/instant_purge_categories</code> — when the cache is purged, also purge the pages of the categories the product belongs to (so listings reflect the edit, not just the product page). Root/default categories are excluded. <span class="b b-def">Default: Yes</span></span></div>
+        </div>
       </div>
     </section>
 
@@ -466,12 +497,23 @@
       <div class="card">
         <div class="card-top">
           <h3>Facet Attributes</h3>
-          <div class="badges"><span class="b b-type">Text</span><span class="b b-def">Default: part_type, color, size, link_style, shock_spacing</span><span class="b b-scope">Store-level</span></div>
+          <div class="badges"><span class="b b-type">Text</span><span class="b b-def">Default: empty</span><span class="b b-scope">Store-level</span></div>
         </div>
         <span class="pathline">fastmagento/search/facet_attributes</span>
-        <p class="lead">Comma-separated attribute codes that become the filter facets on the instant-search results page. Category is always included automatically.</p>
+        <p class="lead">Comma-separated attribute codes that become the filter facets on the instant-search results page. Category is always included automatically. Codes that don't exist on your catalogue are skipped.</p>
         <div class="ex"><span class="lbl">Example</span><code>part_type,compatible_platforms,color,size</code></div>
-        <div class="call call-warn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l9 16H3z"/><path d="M12 9v4M12 17h.01"/></svg><span class="ct">Use <b>filterable, SELECT-type</b> attributes. Their option labels resolve cleanly from the index; multi-select attributes aren't supported here yet (they need an indexed option dictionary).</span></div>
+        <div class="call call-warn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l9 16H3z"/><path d="M12 9v4M12 17h.01"/></svg><span class="ct">Use <b>filterable, SELECT-type</b> attributes. Their option labels resolve cleanly from the index; multi-select attributes aren't supported here yet (they need an indexed option dictionary). <b>Ships empty on purpose</b> — a catalogue-specific default would silently break facets on stores lacking those exact codes.</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-top">
+          <h3>Results Grid Columns <span class="b b-new">v2.1.0</span></h3>
+          <div class="badges"><span class="b b-type">Number (1–6)</span><span class="b b-def">Default: 4</span><span class="b b-scope">Store-level</span></div>
+        </div>
+        <span class="pathline">fastmagento/search/grid_columns</span>
+        <p class="lead">How many products per row the instant-search results grid shows. Set it to match your <b>category</b> pages' column count so search and category listings look consistent, instead of a hard-coded 4.</p>
+        <div class="ex"><span class="lbl">Example</span>Your category pages show a 3-up grid → set this to <code>3</code> so a shopper moving from a category to a search sees the same layout.</div>
+        <div class="call call-info"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg><span class="ct">Responsive: the count is reduced automatically to at most <b>3 on tablet</b> (&le;1024px) and <b>2 on mobile</b> (&le;640px), so a higher desktop value never overflows a small screen.</span></div>
       </div>
 
       <!-- Boost in stock -->
@@ -556,6 +598,7 @@
         </div>
         <p class="lead">Reads your attribute values + category names and builds shopper-facing synonym groups, merged into <a href="#search">Search &gt; Synonyms</a>.</p>
         <div class="call call-tip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg><span class="ct"><b>Order of operations:</b> save the API Key first → click Generate → <b>review</b> the proposed groups → Save the Synonyms field. Nothing changes live search until you save.</span></div>
+        <div class="ex"><span class="lbl">CLI equivalent <span class="b b-new">v2.1.0</span></span>Same job from the command line, for deploy pipelines: <code>bin/magento fastmagento:thesaurus:generate</code></div>
       </div>
     </section>
 
@@ -661,11 +704,30 @@
 
     <div class="divider"></div>
 
-    <!-- ============== 7. ADVANCED ============== -->
+    <!-- ============== 7. FOOTER CREDIT ============== -->
+    <section class="section" id="credit">
+      <div class="sec-head">
+        <span class="sec-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-4.4-9.5-8.5C1 9.5 2.5 6 6 6c2 0 3.2 1.2 4 2.3C10.8 7.2 12 6 14 6c3.5 0 5 3.5 3.5 6.5C19 16.6 12 21 12 21z"/></svg></span>
+        <h2>7 · Footer Credit</h2>
+      </div>
+      <p class="sec-sub"><span class="path-root">fastmagento/credit/*</span> &nbsp;·&nbsp; A small, honest attribution link in the storefront footer.</p>
+
+      <div class="card">
+        <div class="card-top">
+          <h3>Show "Powered by FastMagento" credit</h3>
+          <div class="badges"><span class="b b-type">Yes / No</span><span class="b b-def">Default: Yes</span><span class="b b-scope">Store-level</span></div>
+        </div>
+        <span class="pathline">fastmagento/credit/show</span>
+        <p class="lead">Renders a subtle, class-based "Powered by FastMagento" credit in the footer — a real, visible attribution link (never hidden or cloaked). It's the one thing the project asks in return, and it helps other merchants find the extension.</p>
+        <div class="call call-info"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1"/></svg><span class="ct">If it doesn't fit your footer, please <b>restyle it rather than removing it</b> — it's plain and class-based, so a couple of lines of CSS reskin it (<code class="inl">.fm-credit</code>, <code class="inl">.fm-credit__link</code>), or override the template <code class="inl">ParkkTech_FastMagento::footer-credit.phtml</code> in your theme.</span></div>
+      </div>
+    </section>
+
+    <!-- ============== 8. ADVANCED ============== -->
     <section class="section" id="advanced">
       <div class="sec-head">
         <span class="sec-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/></svg></span>
-        <h2>7 · Advanced (config-only)</h2>
+        <h2>8 · Advanced (config-only)</h2>
       </div>
       <p class="sec-sub">These have no admin screen — set them via <code class="inl">app/etc/config.php</code>, <code class="inl">env.php</code>, or <code class="inl">bin/magento config:set</code>. Defaults are correct for almost everyone.</p>
 
@@ -701,7 +763,11 @@ bin/magento config:set fastmagento/search/search_operator all<br>
 bin/magento config:set --scope=stores --scope-code=default fastmagento/cart/enable_fast_checkout 1<br><br>
 <b># After changing searchable attributes / AI keywords</b><br>
 bin/magento fastmagento:search-keywords:generate&nbsp;&nbsp;<span style="color:var(--muted)"># optional: build the AI keyword layer</span><br>
+bin/magento fastmagento:thesaurus:generate&nbsp;&nbsp;<span style="color:var(--muted)"># optional: AI synonym groups (CLI parity with the admin button)</span><br>
 bin/magento indexer:reindex catalogsearch_fulltext fastmagento_product fastmagento_category<br><br>
+<b># Turn on instant product update (edits go live on save)</b><br>
+bin/magento config:set fastmagento/indexing/instant_product_update 1<br>
+bin/magento setup:di:compile&nbsp;&nbsp;<span style="color:var(--muted)"># new DI wiring; production mode</span><br><br>
 <b># Efficiency monitor on demand</b><br>
 bin/magento fastmagento:efficiency:scan --sample=50<br><br>
 <b># Flush after config changes</b><br>
