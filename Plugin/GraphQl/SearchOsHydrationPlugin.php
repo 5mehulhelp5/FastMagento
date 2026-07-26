@@ -139,7 +139,8 @@ class SearchOsHydrationPlugin
                 $pageSize,
                 $filters,
                 $withAggregation,
-                $sortMap['override']
+                $sortMap['override'],
+                $withAggregation
             );
 
             if ($withAggregation && empty($result['facets'])) {

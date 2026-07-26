@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ParkkTech\FastMagento\Plugin\GraphQl;
 
 use Magento\CatalogGraphQl\Model\Resolver\Aggregations;
+use Magento\Directory\Model\PriceCurrency;
 use Magento\Framework\GraphQl\Config\Element\Field;
 use Magento\Framework\GraphQl\Schema\Type\ResolveInfo;
 use ParkkTech\FastMagento\Helper\WriteLog;
@@ -30,7 +31,8 @@ class AggregationsOsHydrationPlugin
     public function __construct(
         private readonly CategoryDataProvider $categoryData,
         private readonly WriteLog $writeLog,
-        private readonly FacetHolder $facetHolder
+        private readonly FacetHolder $facetHolder,
+        private readonly PriceCurrency $priceCurrency
     ) {
     }
 
@@ -90,6 +92,9 @@ class AggregationsOsHydrationPlugin
                 continue;
             }
             $isCategory = $code === 'category';
+            // 'price' needs no special-casing here: 'price_bucket' / attribute_code='price' /
+            // label='Price' all fall out of the generic rule below - only its OPTION values
+            // (raw "from-to" numeric ranges) need currency conversion, done in buildOptions().
             $bucketName = $isCategory ? 'category_bucket' : $code . '_bucket';
             $result[$bucketName] = [
                 'label' => $isCategory ? 'Category' : $this->humanizeLabel($code),
@@ -122,6 +127,18 @@ class AggregationsOsHydrationPlugin
                 // frontend mega-menu/breadcrumbs already use, so this stays EAV-free too.
                 $doc = $this->categoryData->getById((int) $value);
                 $label = $doc['name'] ?? $value;
+            } elseif ($code === 'price') {
+                // Our plugin returns straight from aroundResolve, bypassing core's
+                // Aggregations::getConvertedAndRoundedOptionValue() price post-processing - so
+                // this has to do that same "from-to" -> currency conversion itself.
+                // InstantSearch::formatRangeOption() gives us a raw numeric "from-to" value/label
+                // (e.g. "100-250"); skip (not return null from the whole method) any range this
+                // store's currency conversion can't parse, rather than surface a raw number.
+                $converted = $this->convertPriceRange($value);
+                if ($converted === null) {
+                    continue;
+                }
+                [$value, $label] = $converted;
             } elseif ($label === null || $label === '') {
                 // Attribute facet option whose OS bucket label could not be resolved (the
                 // indexed doc has no matching "<code>_value" option label). The storefront
@@ -137,6 +154,26 @@ class AggregationsOsHydrationPlugin
             ];
         }
         return $options;
+    }
+
+    /**
+     * Convert a raw "from-to" numeric price range (e.g. "100-250", from
+     * InstantSearch::formatRangeOption()) into the currency-formatted shape core's own
+     * price_bucket produces: label is "convertedFrom-convertedTo"; value replaces the dash with
+     * an underscore (matching core's own value encoding) so it round-trips as a single filter
+     * value. Returns null for anything that doesn't parse as two numbers.
+     *
+     * @return array{0: string, 1: string}|null
+     */
+    private function convertPriceRange(string $range): ?array
+    {
+        $parts = explode('-', $range, 2);
+        if (count($parts) !== 2 || !is_numeric($parts[0]) || !is_numeric($parts[1])) {
+            return null;
+        }
+        $label = $this->priceCurrency->convertAndRound((float) $parts[0])
+            . '-' . $this->priceCurrency->convertAndRound((float) $parts[1]);
+        return [str_replace('-', '_', $label), $label];
     }
 
     /**

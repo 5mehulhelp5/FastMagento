@@ -6,6 +6,8 @@ namespace ParkkTech\FastMagento\Model\Search;
 
 use Magento\AdvancedSearch\Model\Client\ClientResolver;
 use Magento\Catalog\Api\ProductRepositoryInterface;
+use Magento\Customer\Model\Group as CustomerGroup;
+use Magento\Customer\Model\Session as CustomerSession;
 use Magento\Framework\App\Config\ScopeConfigInterface;
 use Magento\Framework\Pricing\PriceCurrencyInterface;
 use Magento\Framework\Search\EngineResolverInterface;
@@ -26,6 +28,9 @@ use ParkkTech\FastMagento\Helper\WriteLog;
  */
 class InstantSearch
 {
+    /** Sentinel used as the numeric upper bound of the open-ended top price range bucket. */
+    private const PRICE_RANGE_OPEN_END = 999999;
+
     public function __construct(
         private readonly ClientResolver $clientResolver,
         private readonly EngineResolverInterface $engineResolver,
@@ -35,7 +40,8 @@ class InstantSearch
         private readonly PriceCurrencyInterface $priceCurrency,
         private readonly WriteLog $writeLog,
         private readonly RelevanceConfig $relevanceConfig,
-        private readonly ProductRepositoryInterface $productRepository
+        private readonly ProductRepositoryInterface $productRepository,
+        private readonly CustomerSession $customerSession
     ) {
     }
 
@@ -51,6 +57,9 @@ class InstantSearch
      *        never pass it - the storefront Suggest/Instant controllers - are unaffected. A
      *        deterministic `_id` tiebreaker is appended automatically so paging stays stable
      *        regardless of what the caller supplies.
+     * @param bool $includePriceFacet add a price-range facet alongside category/attribute facets.
+     *        Default false so the storefront Suggest/Instant controllers (which never pass it)
+     *        are unaffected - only the GraphQL aggregation path opts in explicitly.
      * @return array{query:string,total:int,page:int,page_size:int,products:array,facets:array}
      */
     public function search(
@@ -59,7 +68,8 @@ class InstantSearch
         int $pageSize = 8,
         array $filters = [],
         bool $withFacets = false,
-        ?array $sortOverride = null
+        ?array $sortOverride = null,
+        bool $includePriceFacet = false
     ): array {
         $query = trim($query);
         $page = max(1, $page);
@@ -100,7 +110,7 @@ class InstantSearch
                 $body['sort'] = $sort;
             }
             if ($withFacets) {
-                $body['aggs'] = $this->buildAggregations();
+                $body['aggs'] = $this->buildAggregations($includePriceFacet);
             }
 
             $response = $client->getOpenSearchClient()->search([
@@ -376,9 +386,10 @@ class InstantSearch
     }
 
     /**
+     * @param bool $includePriceFacet see {@see search()}'s $includePriceFacet param.
      * @return array<string, mixed>
      */
-    private function buildAggregations(): array
+    private function buildAggregations(bool $includePriceFacet = false): array
     {
         $aggs = [
             'category' => ['terms' => ['field' => 'category_ids', 'size' => 15]],
@@ -394,7 +405,54 @@ class InstantSearch
                 ],
             ];
         }
+        if ($includePriceFacet) {
+            $priceField = $this->resolveGuestPriceField();
+            if ($priceField !== null) {
+                // Static round-number breakpoints rather than a stats-then-range two-pass query:
+                // one OS round trip, no extra latency. Empty ranges are dropped in formatFacets().
+                $aggs['price'] = [
+                    'range' => [
+                        'field' => $priceField,
+                        'ranges' => [
+                            ['to' => 25],
+                            ['from' => 25, 'to' => 50],
+                            ['from' => 50, 'to' => 100],
+                            ['from' => 100, 'to' => 250],
+                            ['from' => 250, 'to' => 500],
+                            ['from' => 500, 'to' => 1000],
+                            ['from' => 1000, 'to' => 2500],
+                            ['from' => 2500, 'to' => 5000],
+                            ['from' => 5000],
+                        ],
+                    ],
+                ];
+            }
+        }
         return $aggs;
+    }
+
+    /**
+     * The indexed price field (`price_<customerGroup>_<website>`) for the guest/default
+     * customer group (0) only. Same conservative rule as
+     * Plugin\GraphQl\SearchOsHydrationPlugin::resolveGuestPriceField(): any other group, or an
+     * unresolvable website, returns null and the price facet is simply omitted rather than
+     * aggregating on the wrong group's price.
+     */
+    private function resolveGuestPriceField(): ?string
+    {
+        try {
+            $groupId = (int) $this->customerSession->getCustomerGroupId();
+            if ($groupId !== CustomerGroup::NOT_LOGGED_IN_ID) {
+                return null;
+            }
+            $websiteId = (int) $this->storeManager->getStore()->getWebsiteId();
+            if ($websiteId <= 0) {
+                return null;
+            }
+        } catch (\Throwable $e) {
+            return null;
+        }
+        return 'price_' . $groupId . '_' . $websiteId;
     }
 
     /**
@@ -743,6 +801,15 @@ class InstantSearch
         foreach ($aggregations as $code => $agg) {
             $options = [];
             foreach ($agg['buckets'] ?? [] as $bucket) {
+                // A range aggregation's buckets carry `from`/`to` instead of a term `key`;
+                // formatted separately since there is no "label" sub-hit for a numeric range.
+                if (array_key_exists('from', $bucket) || array_key_exists('to', $bucket)) {
+                    $option = $this->formatRangeOption($bucket);
+                    if ($option !== null) {
+                        $options[] = $option;
+                    }
+                    continue;
+                }
                 $option = [
                     'value' => (string) $bucket['key'],
                     'count' => (int) $bucket['doc_count'],
@@ -760,6 +827,27 @@ class InstantSearch
             }
         }
         return $facets;
+    }
+
+    /**
+     * Format a price-range aggregation bucket as a dash-separated numeric range
+     * (e.g. "100-250"). The open-ended top bucket (no `to`) uses a large sentinel upper bound
+     * rather than an open range, since the resolver's currency conversion expects two numbers.
+     * Returns null (dropped by the caller) for an empty range.
+     *
+     * @param array<string, mixed> $bucket
+     * @return array{value: string, label: string, count: int}|null
+     */
+    private function formatRangeOption(array $bucket): ?array
+    {
+        $count = (int) ($bucket['doc_count'] ?? 0);
+        if ($count <= 0) {
+            return null;
+        }
+        $from = isset($bucket['from']) ? (int) round((float) $bucket['from']) : 0;
+        $to = isset($bucket['to']) ? (int) round((float) $bucket['to']) : self::PRICE_RANGE_OPEN_END;
+        $range = $from . '-' . $to;
+        return ['value' => $range, 'label' => $range, 'count' => $count];
     }
 
     /**
