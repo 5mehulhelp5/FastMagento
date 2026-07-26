@@ -6,8 +6,10 @@ namespace ParkkTech\FastMagento\Model\Indexer;
 
 use Magento\AdvancedSearch\Model\Client\ClientResolver;
 use Magento\Catalog\Model\ResourceModel\Category\CollectionFactory as CategoryCollectionFactory;
+use Magento\Framework\App\Config\ScopeConfigInterface;
 use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\Exception\LocalizedException;
+use Magento\Store\Model\ScopeInterface;
 use Magento\Framework\Indexer\ActionInterface;
 use Magento\Framework\Mview\ActionInterface as MviewActionInterface;
 use Magento\Framework\Search\EngineResolverInterface;
@@ -46,9 +48,13 @@ class CategoryIndexer implements ActionInterface, MviewActionInterface
         private readonly ResourceConnection $resource,
         private readonly StoreManagerInterface $storeManager,
         private readonly OpenSearchConfig $openSearchConfig,
-        private readonly WriteLog $writeLog
+        private readonly WriteLog $writeLog,
+        private readonly ScopeConfigInterface $scopeConfig
     ) {
     }
+
+    /** Cached category url suffix for the index store (e.g. ".html"). */
+    private ?string $categoryUrlSuffix = null;
 
     /**
      * @param int|string $id
@@ -145,7 +151,7 @@ class CategoryIndexer implements ActionInterface, MviewActionInterface
             'is_anchor' => (int) ($category->getIsAnchor() ?? 0),
             'display_mode' => (string) ($category->getDisplayMode() ?? ''),
             'url_key' => (string) ($category->getUrlKey() ?? ''),
-            'url_path' => (string) ($category->getUrlPath() ?? ''),
+            'url_path' => $this->resolveUrlPath($category, $requestPaths[$entityId] ?? '', $storeId),
             'all_children' => (string) ($category->getData('all_children') ?? ''),
             'request_path' => $requestPaths[$entityId] ?? '',
             'store_id' => $storeId,
@@ -171,6 +177,43 @@ class CategoryIndexer implements ActionInterface, MviewActionInterface
         }
         // entity_id is unique per (store, redirect_type=0); fetchPairs keeps the canonical path.
         return array_map('strval', $connection->fetchPairs($select));
+    }
+
+    /**
+     * Category url_path, falling back to the canonical url_rewrite request_path (suffix stripped)
+     * when the legacy url_path attribute was never generated. That attribute is null for many
+     * categories here (~half), yet every category has a url_rewrite record, so headless clients
+     * that build hrefs from url_path (e.g. Daffodil) would otherwise get "/null.html" or an empty
+     * path. Native Luma is unaffected either way (it routes off request_path).
+     *
+     * @param \Magento\Catalog\Model\Category $category
+     */
+    private function resolveUrlPath($category, string $requestPath, int $storeId): string
+    {
+        $urlPath = (string) ($category->getUrlPath() ?? '');
+        if ($urlPath !== '' || $requestPath === '') {
+            return $urlPath;
+        }
+        $suffix = $this->getCategoryUrlSuffix($storeId);
+        if ($suffix !== '' && str_ends_with($requestPath, $suffix)) {
+            return substr($requestPath, 0, -strlen($suffix));
+        }
+        return $requestPath;
+    }
+
+    /**
+     * Configured category url suffix (default ".html") for the index store, read once.
+     */
+    private function getCategoryUrlSuffix(int $storeId): string
+    {
+        if ($this->categoryUrlSuffix === null) {
+            $this->categoryUrlSuffix = (string) ($this->scopeConfig->getValue(
+                'catalog/seo/category_url_suffix',
+                ScopeInterface::SCOPE_STORE,
+                $storeId
+            ) ?? '');
+        }
+        return $this->categoryUrlSuffix;
     }
 
     /**
