@@ -12,8 +12,8 @@ use ParkkTech\FastMagento\Model\AttributeOption\OptionRepository;
 
 /**
  * Admin AJAX: bulk-delete attribute options. Two modes:
- *   - mode=selected → delete the explicitly checked option ids (option_ids[]).
- *   - mode=all      → delete EVERY option matching the current search + assignment filter (across
+ *   - mode=selected delete the explicitly checked option ids (option_ids[]).
+ *   - mode=all      delete EVERY option matching the current search + assignment filter (across
  *                     all pages), e.g. "all unassigned options".
  * POST-only; form key + ACL enforced by the admin router. Deletes are chunked in the repository so
  * clearing tens of thousands of unused options stays within sane transaction sizes.

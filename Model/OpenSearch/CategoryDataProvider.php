@@ -123,7 +123,7 @@ class CategoryDataProvider
 
             $this->available = !empty($this->byId);
         } catch (\Throwable $e) {
-            // OS unavailable / index missing → fall back to native EAV everywhere.
+            // OS unavailable / index missing fall back to native EAV everywhere.
             $this->available = false;
             $this->writeLog->writeErrorLog('[FastMagento] category tree load failed: ' . $e->getMessage());
         }

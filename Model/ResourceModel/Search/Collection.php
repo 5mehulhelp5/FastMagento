@@ -30,7 +30,7 @@ class Collection extends ProductCollection
         \Magento\Framework\Module\Manager $moduleManager,
         \Magento\Catalog\Model\Indexer\Product\Flat\State $catalogProductFlatState,
         ScopeConfigInterface $scopeConfig,
-        ConnectionManager $connectionManager, // 🔹 OpenSearch Connection
+        ConnectionManager $connectionManager, // OpenSearch Connection
         ShellProductBuilder $shellProductBuilder,
         ?\Magento\Framework\DB\Adapter\AdapterInterface $connection = null
     ) {

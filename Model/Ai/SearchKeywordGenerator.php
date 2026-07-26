@@ -20,7 +20,7 @@ use ParkkTech\FastMagento\Setup\Patch\Data\AddSearchKeywordsAttribute;
  *
  * For a batch of products it sends each product's name + key attribute labels + a short
  * description snippet to the model and asks for a compact, comma-separated list of buyer-facing
- * search terms and platform aliases (UTV ↔ side-by-side ↔ SxS, "front end" ↔ frontend, brand /
+ * search terms and platform aliases (UTV side-by-side SxS, "front end" frontend, brand /
  * fitment nicknames). The terms are written straight to `fm_search_keywords` via the product
  * resource action (a bulk attribute UPDATE, no full product save), so the native fulltext
  * indexer then makes them searchable and InstantSearch ranks them (see RelevanceConfig).
@@ -314,12 +314,12 @@ PRODUCTS:
 
 For EACH product, produce a compact, comma-separated list of the search terms a real shopper
 would type to find THIS product but that may not appear verbatim in its name/description. Include:
-- Platform / vehicle aliases and abbreviations (UTV ↔ side-by-side ↔ SxS ↔ side by side;
-  ATV ↔ four-wheeler / quad; dirt bike ↔ moto).
-- Part-type nicknames and everyday phrasings ("front end" ↔ frontend, "a-arm" ↔ control arm,
-  light bar ↔ LED bar, skid plate ↔ belly pan).
+- Platform / vehicle aliases and abbreviations (UTV side-by-side SxS side by side;
+  ATV four-wheeler / quad; dirt bike moto).
+- Part-type nicknames and everyday phrasings ("front end" frontend, "a-arm" control arm,
+  light bar LED bar, skid plate belly pan).
 - Fitment / brand / model nicknames actually used by buyers (e.g. RZR, Ranger, Maverick, Talon,
-  Can-Am ↔ canam, Polaris, "turbo s").
+  Can-Am canam, Polaris, "turbo s").
 - Common misspellings and singular/plural or hyphenation variants.
 
 RULES:

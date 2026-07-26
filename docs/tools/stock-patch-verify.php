@@ -7,10 +7,10 @@
  * for everything else it must NOT touch.
  *
  * Method, per product id:
- *   1. Full reproject (executeList) → mget → BASELINE _source.
+ *   1. Full reproject (executeList) mget BASELINE _source.
  *   2. Corrupt ONLY the stock fields (flip is_in_stock, qty=-999, children too) and index that.
  *   3. Run patchStockDocs([id]) via reflection (fast_stock_sync path).
- *   4. mget → PATCHED _source. Assert PATCHED === BASELINE exactly (and no reproject fallback).
+ *   4. mget PATCHED _source. Assert PATCHED === BASELINE exactly (and no reproject fallback).
  *
  * READ-ONLY w.r.t. the catalog/DB (only rewrites the product's own index doc, which it restores
  * to a correct reprojection at the end).

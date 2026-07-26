@@ -9,7 +9,7 @@ use Magento\Framework\Mview\ActionInterface as MviewActionInterface;
 use ParkkTech\FastMagento\Model\OptionDictionary;
 
 /**
- * Projects every option-bearing attribute's option→label set into the OpenSearch dictionary index
+ * Projects every option-bearing attribute's option->label set into the OpenSearch dictionary index
  * (see OptionDictionary). Options change rarely and are not per-product, so every trigger performs
  * the same idempotent full rebuild — cheap relative to the product index.
  *

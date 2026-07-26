@@ -54,7 +54,7 @@ class SourceOptionPlugin
     public function aroundGetOptionText(Table $subject, callable $proceed, $value)
     {
         // Multi-value (multiselect): resolve each id from the dictionary and return the label array
-        // (native returns an array here). Any unresolved id → fall back to native for the whole set.
+        // (native returns an array here). Any unresolved id fall back to native for the whole set.
         if (is_array($value) || (is_string($value) && strpos($value, ',') !== false)) {
             $attributeId = $this->attributeId($subject);
             if ($attributeId <= 0) {
@@ -90,7 +90,7 @@ class SourceOptionPlugin
         if ($attributeId <= 0) {
             return $proceed($value);
         }
-        // Numeric value = an option id → resolve its label from the dictionary.
+        // Numeric value = an option id resolve its label from the dictionary.
         if (ctype_digit($v)) {
             $label = $this->dictionary->getOptionText($attributeId, $v);
             return $label === null ? $proceed($value) : $label;

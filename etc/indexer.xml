@@ -36,7 +36,7 @@
     >
         <title translate="true">FastMagento Attribute Options</title>
         <description translate="true">
-            Projects each option-bearing attribute's option→label dictionary to OpenSearch so option
+            Projects each option-bearing attribute's optionlabel dictionary to OpenSearch so option
             labels (PDP attributes, layered-nav facets, swatches, search) resolve without MySQL.
         </description>
     </indexer>

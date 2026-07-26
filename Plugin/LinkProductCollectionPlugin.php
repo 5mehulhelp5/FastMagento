@@ -77,7 +77,7 @@ class LinkProductCollectionPlugin
             foreach ($ids as $id) {                       // position order preserved
                 $doc = $docs[$id] ?? null;
                 if ($doc === null) {
-                    return $proceed($printQuery, $logQuery);   // a linked product not in OS → native
+                    return $proceed($printQuery, $logQuery);   // a linked product not in OS native
                 }
                 if (!in_array((int) ($doc['visibility'] ?? 0), self::VISIBLE, true)
                     || (int) ($doc['status'] ?? 0) !== self::STATUS_ENABLED) {

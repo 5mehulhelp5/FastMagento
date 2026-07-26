@@ -8,7 +8,7 @@
        you can define that preference here.
     -->
 
-    <!-- ✅ Ensure backend/indexer uses MySQL resource collection -->
+    <!-- Ensure backend/indexer uses MySQL resource collection -->
 <!--    <preference for="Magento\Catalog\Model\ResourceModel\Product\Collection"
                 type="ParkkTech\FastMagento\Model\ResourceModel\Product\IndexerProductCollection"
     />-->

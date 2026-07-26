@@ -50,7 +50,7 @@ class AddSearchKeywordsAttribute implements DataPatchInterface
             'required' => false,
             'user_defined' => true,
             'default' => '',
-            // Searchable at a high weight → native fulltext indexer includes it and ranks it high.
+            // Searchable at a high weight native fulltext indexer includes it and ranks it high.
             'searchable' => true,
             'search_weight' => 8,
             'filterable' => false,

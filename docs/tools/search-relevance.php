@@ -102,7 +102,7 @@ foreach ($queries as $spec) {
                 }
             }
         }
-        echo '  ' . ($hit ? $c('32', '✓') : $c('31', '✗'))
+        echo '  ' . ($hit ? $c('32', 'PASS') : $c('31', 'FAIL'))
             . ' top-3 contains any of [' . implode(', ', (array) $spec['expect_top_any']) . "]\n";
         $passedChecks += $hit ? 1 : 0;
     }
@@ -117,7 +117,7 @@ foreach ($queries as $spec) {
                 }
             }
         }
-        echo '  ' . ($bad ? $c('31', '✗') : $c('32', '✓'))
+        echo '  ' . ($bad ? $c('31', 'FAIL') : $c('32', 'PASS'))
             . ' top-3 avoids [' . implode(', ', (array) $spec['avoid_top3']) . "]\n";
         $passedChecks += $bad ? 0 : 1;
     }

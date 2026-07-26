@@ -82,7 +82,7 @@ class CategoryIndexer implements ActionInterface, MviewActionInterface
     }
 
     /**
-     * @param int[]|null $ids Empty/null → all categories.
+     * @param int[]|null $ids Empty/null all categories.
      */
     public function execute($ids = []): void
     {

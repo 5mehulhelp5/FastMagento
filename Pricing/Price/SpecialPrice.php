@@ -11,7 +11,7 @@ use ParkkTech\FastMagento\Model\ShellProduct\ShellNoEavProduct;
  * valid special price (0 !== null && 0 !== false), so a 0 becomes a $0.00 "special price" that
  * wins the FinalPrice/BasePrice min() — every shell (and every configurable variant's
  * optionPrices) then renders a final price of 0. Guard the shell case: a special price of 0 (or
- * negative) means "no special price" → return false so the regular / catalog-rule price stands.
+ * negative) means "no special price" return false so the regular / catalog-rule price stands.
  */
 class SpecialPrice extends CoreSpecialPrice
 {

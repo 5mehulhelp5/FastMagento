@@ -120,7 +120,7 @@ class ShellNoEavProduct extends CoreProduct
     {
         // Keep the product type's RUNTIME object caches (_cache_instance_*) out of the doc — they
         // get accidentally serialized into the index and, served back, are stale JSON arrays that
-        // make core treat arrays as attribute objects (cart 500 in getUsedProductAttributes →
+        // make core treat arrays as attribute objects (cart 500 in getUsedProductAttributes
         // getId()). {@see stripRuntimeCaches} clears them from the model data at build end too.
         foreach (array_keys($doc) as $key) {
             if (strncmp((string) $key, '_cache_instance', 15) === 0) {
@@ -435,7 +435,7 @@ public function getProductUrl($useSid = null)
 }
 
     /**
-     * ✅ Fetch URL Rewrites for the Product (Category + Product URL)
+     * Fetch URL Rewrites for the Product (Category + Product URL)
      * NOTE: This method is only called as a fallback when url_path is not available in OpenSearch doc.
      */
     private function getUrlRewrite(bool $includeCategory)

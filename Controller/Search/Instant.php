@@ -68,7 +68,7 @@ class Instant extends Action
                         $option['skip'] = true;   // root/site categories
                     }
                 } elseif (($option['label'] ?? '') === '') {
-                    $option['skip'] = true;       // id with no OS label → never show a raw id
+                    $option['skip'] = true;       // id with no OS label never show a raw id
                 }
             }
             unset($option);

@@ -30,9 +30,9 @@ use ParkkTech\FastMagento\Helper\ShellProductBuilder;
  *
  * SAFETY: this is checkout. The design is "minimal divergence + hard native fallback".
  *  - Flag off, non-frontend area, custom-option carts, bundle/grouped, downloadable without
- *    indexed links, or ANY id missing/partial in the index → the WHOLE collection falls back
+ *    indexed links, or ANY id missing/partial in the index the WHOLE collection falls back
  *    to `parent::_assignProducts()` (100% native, byte-for-byte identical to stock Magento).
- *  - Any Throwable in the OS branch → same native fallback.
+ *  - Any Throwable in the OS branch same native fallback.
  *
  * The core method uses PRIVATE members ($recollectQuote, $config, getOptionProductIds(),
  * isValidProduct()) a subclass can't reach, so the OS branch injects its own
@@ -145,12 +145,12 @@ class Collection extends \Magento\Quote\Model\ResourceModel\Quote\Item\Collectio
             $canServeConfigurable = $this->isOptimisticStockEnabled();
             foreach ($this as $item) {
                 $type = (string) $item->getData('product_type');
-                // Bundle/grouped: multi-child-per-line selection not OS-proven → native.
+                // Bundle/grouped: multi-child-per-line selection not OS-proven native.
                 // Configurable: only OS-serve it when OPTIMISTIC mode is on — that is what
                 //   suspends the qty-set stock observers whose MSI child cascade otherwise
                 //   makes a served configurable FAR slower (measured 255 vs 79 queries).
                 //   Without optimistic, configurables stay native (safe parity).
-                // Custom options (option_ids): not hydrated into the shell yet → native.
+                // Custom options (option_ids): not hydrated into the shell yet native.
                 if (in_array($type, ['bundle', 'grouped'], true)
                     || ($type === 'configurable' && !$canServeConfigurable)
                     || $item->getOptionByCode('option_ids')
@@ -163,7 +163,7 @@ class Collection extends \Magento\Quote\Model\ResourceModel\Quote\Item\Collectio
             $docs = $this->osFetcher->fetchByIds($ids);
 
             // Hard fallback: never half-serve a mixed cart. Any id missing OR not fully
-            // servable → the WHOLE collection goes native (safe, byte-for-byte identical).
+            // servable the WHOLE collection goes native (safe, byte-for-byte identical).
             foreach ($ids as $id) {
                 if (!isset($docs[$id]) || !$this->isDocServable($docs[$id])) {
                     return parent::_assignProducts();
@@ -315,15 +315,15 @@ class Collection extends \Magento\Quote\Model\ResourceModel\Quote\Item\Collectio
         if (empty($doc['extension_attributes']['stock_item'])) {
             return false;
         }
-        // Downloadable without indexed links is not cart-proven yet (gap b) → native.
+        // Downloadable without indexed links is not cart-proven yet (gap b) native.
         if ($doc['type_id'] === 'downloadable' && empty($doc['downloadable_links'])) {
             return false;
         }
-        // Bundle/grouped → native (multi-child-per-line selection not OS-proven yet).
+        // Bundle/grouped native (multi-child-per-line selection not OS-proven yet).
         if (in_array($doc['type_id'], ['bundle', 'grouped'], true)) {
             return false;
         }
-        // Configurable → served ONLY in optimistic mode, which suspends the qty-set stock
+        // Configurable served ONLY in optimistic mode, which suspends the qty-set stock
         // observers whose MSI child cascade would otherwise dominate (255 vs 79 queries). Built
         // child-less + wired to the in-cart variant in assignProductsFromOs. Else native.
         if ($doc['type_id'] === 'configurable' && !$this->isOptimisticStockEnabled()) {

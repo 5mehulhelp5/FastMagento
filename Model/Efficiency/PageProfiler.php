@@ -20,7 +20,7 @@ use Psr\Log\LoggerInterface;
  * in-process scenarios can't see (e.g. Webkul re-loading seller data ~87x/PDP inside its blocks).
  *
  * Produces developer-ready findings: {extension, page, class, method, loops, table}. "loops" is the
- * number of times the same (class::method → table) query fired in one page render — the signal that
+ * number of times the same (class::method table) query fired in one page render — the signal that
  * says "this method is looping; go look here".
  */
 class PageProfiler
@@ -431,7 +431,7 @@ class PageProfiler
 
     /**
      * True when a query was fired *inside* Checkout\Model\Session::getQuote() — the checkout
-     * session's per-request quote bootstrap (load → collectTotals → persist).
+     * session's per-request quote bootstrap (load collectTotals persist).
      *
      * A warm browser session hydrates the checkout quote once and reuses it across page views, so
      * the customer-data "cart" section it pulls on every page does ~one address read and no writes.
@@ -441,7 +441,7 @@ class PageProfiler
      * function of the harness, not something a real shopper hits, and it mis-attributes to whichever
      * customer-data section source (or afterGetSectionData plugin) happens to call getQuote() first.
      * Drop it so the endpoint reports only genuine per-render loops. Real cart/quote N+1s still
-     * surface: per-item rendering (getRecentItems → getItemData) runs *after* getQuote() returns, so
+     * surface: per-item rendering (getRecentItems getItemData) runs *after* getQuote() returns, so
      * those frames don't carry this signature, and the dedicated checkout-totals pass exercises the
      * quote through webapi (no checkout session) and is unaffected.
      *

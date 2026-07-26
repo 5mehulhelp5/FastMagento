@@ -11,8 +11,8 @@ use ParkkTech\FastMagento\Model\Search\SynonymImporter;
  * Builds a search thesaurus for THIS store's catalogue by scraping the real vocabulary the store
  * sells — select/multiselect/swatch attribute option labels, category names, AND a sample of
  * product names — then asking the model to (a) map common shopper words to those terms and
- * (b) surface grammatical/compound variants the copy actually uses (front end ↔ frontend,
- * back end ↔ rear end, a-arm ↔ a arm, hyphenation/spacing/plural pairs). The result merges into
+ * (b) surface grammatical/compound variants the copy actually uses (front end frontend,
+ * back end rear end, a-arm a arm, hyphenation/spacing/plural pairs). The result merges into
  * the fastmagento/search/synonyms config (which drives fulltext relevance and swatch
  * pre-selection). "Generate from your website" — no hand-curation.
  */

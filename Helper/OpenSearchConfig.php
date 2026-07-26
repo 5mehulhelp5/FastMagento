@@ -8,7 +8,7 @@ use Magento\Framework\App\Config\ScopeConfigInterface;
 
 class OpenSearchConfig extends AbstractHelper
 {
-    protected $scopeConfig; // ✅ Removed strict type declaration
+    protected $scopeConfig; // Removed strict type declaration
 
     public function __construct(
         Context $context,
@@ -54,7 +54,7 @@ class OpenSearchConfig extends AbstractHelper
     }
 
     /**
-     * ✅ Get OpenSearch Index Name from Configuration.
+     * Get OpenSearch Index Name from Configuration.
      */
     public function getIndexName(): string
     {
@@ -68,7 +68,7 @@ class OpenSearchConfig extends AbstractHelper
     }
 
     /**
-     * ✅ Category serving index name (sibling of the product index).
+     * Category serving index name (sibling of the product index).
      * e.g. magento2_categories — same default prefix, admin-overridable suffix.
      */
     public function getCategoryIndexName(): string
@@ -80,7 +80,7 @@ class OpenSearchConfig extends AbstractHelper
     }
 
     /**
-     * ✅ Attribute-option dictionary index name (sibling of the product/category indexes).
+     * Attribute-option dictionary index name (sibling of the product/category indexes).
      * Holds every option-bearing attribute's {option_id => label} set so option labels
      * (PDP additional attributes, layered-nav facets, swatches, search) resolve from OpenSearch
      * instead of eav_attribute_option* MySQL loads. e.g. magento2_attribute_options.

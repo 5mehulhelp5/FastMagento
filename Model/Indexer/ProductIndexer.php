@@ -501,7 +501,7 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
 
     /**
      * Super-attribute codes for one configurable parent (e.g. color, size), from
-     * catalog_product_super_attribute → eav_attribute, in configured position order — replaces
+     * catalog_product_super_attribute eav_attribute, in configured position order — replaces
      * getConfigurableOptions(), which loads the full option + product-value structure.
      *
      * @return string[]
@@ -910,7 +910,7 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
     {
         static $defaultAttributes = null;
 
-        // ✅ Load default Magento attributes once (optimization)
+        // Load default Magento attributes once (optimization)
         if ($defaultAttributes === null) {
             $defaultAttributes = $this->getDefaultMagentoAttributes();
         }
@@ -922,19 +922,19 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
     {
         $mapping = [];
 
-        // ✅ Use SearchCriteriaBuilder to fetch attributes properly
+        // Use SearchCriteriaBuilder to fetch attributes properly
         $searchCriteria = $this->searchCriteriaBuilder->create();
         $allAttributes = $this->attributeRepository->getList('catalog_product', $searchCriteria);
 
         foreach ($allAttributes->getItems() as $attribute) {
             $attributeCode = $attribute->getAttributeCode();
 
-            // ✅ Ensure only custom attributes are indexed
+            // Ensure only custom attributes are indexed
             if ($this->isDefaultMagentoAttribute($attributeCode)) {
                 continue;
             }
 
-            // ✅ Assign dynamic type (we use 'keyword' to allow filtering & exact matching)
+            // Assign dynamic type (we use 'keyword' to allow filtering & exact matching)
             $mapping[$attributeCode] = ['type' => 'keyword'];
         }
 
@@ -949,7 +949,7 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
         // `_cache_instance_used_product_attributes`, …). getData() carries them once the type
         // instance has run, and serializing them into the index bloats the doc AND, served back on
         // an OS shell, makes core treat stale JSON arrays as attribute objects (cart-page 500 on
-        // getUsedProductAttributes → getId()). They are always rebuilt at runtime; never index them.
+        // getUsedProductAttributes getId()). They are always rebuilt at runtime; never index them.
         foreach (array_keys($productData) as $dataKey) {
             if (strncmp((string) $dataKey, '_cache_instance', 15) === 0) {
                 unset($productData[$dataKey]);
@@ -1027,12 +1027,12 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
         // $productData['custom_attributes'] = $this->getCustomAttributes($product);
         // Merge attribute values dynamically into $productData
         $productData['attributes'] = $this->getAttributeValues($product);
-        // ✅ Add Tier Prices from MySQL to OpenSearch
+        // Add Tier Prices from MySQL to OpenSearch
         $productData['tier_prices'] = $this->batchCtx !== null
             ? ($this->batchCtx['tier'][$pid] ?? [])
             : $this->getTierPrices($product);
 
-        // ✅ Add Catalog Rule Prices from MySQL to OpenSearch, PER CUSTOMER GROUP.
+        // Add Catalog Rule Prices from MySQL to OpenSearch, PER CUSTOMER GROUP.
         // Catalog rules are group-specific (a Wholesale rule prices differently than a guest
         // rule), so the doc carries a {group_id => rule_price} map and the read path resolves
         // the current customer group. `catalog_rule_price` is kept as the group-0 scalar for
@@ -1045,7 +1045,7 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
             ? ['rule_price' => (float)$parentRuleMap[0]]
             : [];
 
-        // ✅ Add Parent IDs for Simple Products (If Configurable)
+        // Add Parent IDs for Simple Products (If Configurable)
         if ($product->getTypeId() === 'simple') {
             $productData['parent_ids'] = $this->batchCtx !== null
                 ? ($this->batchCtx['parents'][$pid] ?? [])
@@ -1055,7 +1055,7 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
             $productData['final_price'] = $this->getBaseFinalPrice($product);
         }
 
-        // ✅ Downloadable: index full link/sample data so the native PDP blocks render
+        // Downloadable: index full link/sample data so the native PDP blocks render
         // straight from OpenSearch (title/price/sample), no downloadable SQL on read.
         if ($product->getTypeId() === 'downloadable') {
             $productData['downloadable_links'] = $this->getDownloadableLinks($product);
@@ -1145,12 +1145,12 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
             $value = $product->getData($attributeCode);
             $optionLabels = [];
 
-            // ✅ Convert boolean values to "Yes" or "No"
+            // Convert boolean values to "Yes" or "No"
             if (is_bool($value)) {
                 $value = [$value ? 'Yes' : 'No'];
             }
 
-            // ✅ Handle dropdown or multi-select attributes (skip when the source model is unavailable)
+            // Handle dropdown or multi-select attributes (skip when the source model is unavailable)
             $source = $this->safeGetSource($attribute);
             if ($source) {
 
@@ -1171,7 +1171,7 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
                 }
             }
 
-            // ✅ Ensure all values are stored as arrays
+            // Ensure all values are stored as arrays
             $attributes[$attributeCode] = is_array($value) ? $value : [(string)$value];
         }
 
@@ -1277,7 +1277,7 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
 
 
     /**
-     * ✅ Fetch Tier Prices from `catalog_product_entity_tier_price`
+     * Fetch Tier Prices from `catalog_product_entity_tier_price`
      */
     private function getTierPrices(\Magento\Catalog\Model\Product $product): array
     {
@@ -1298,7 +1298,7 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
     }
 
     /**
-     * ✅ Fetch Parent Configurable Product IDs Using Proper DI
+     * Fetch Parent Configurable Product IDs Using Proper DI
      */
     private function getParentIds(\Magento\Catalog\Model\Product $product): array
     {
@@ -1308,7 +1308,7 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
     /**
      * Rule-neutral base final price: the special price when it is active and lower than the
      * regular price, otherwise the regular price. Deliberately does NOT call getFinalPrice()
-     * (which dispatches catalog_product_get_final_price → the per-product catalog-rule
+     * (which dispatches catalog_product_get_final_price the per-product catalog-rule
      * getRulePrice() query) nor apply catalog rules — those are stored per group in
      * catalog_rule_prices and applied by the shell at read time. Tier prices are indexed
      * separately and don't affect the qty-1 base shown on a product doc.
@@ -1412,7 +1412,7 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
         $stockMap = $this->getStockMap($childIds);
         // ONE batch catalog-rule-price + tier-price query for ALL children, so each child
         // shell serves them from its OS doc. Without this the configurable PDP price path
-        // (ConfigurablePriceResolver → LowestPriceOptionsProvider → per-child BasePrice)
+        // (ConfigurablePriceResolver LowestPriceOptionsProvider per-child BasePrice)
         // fires one catalogrule_product_price + one catalog_product_entity_tier_price query
         // PER child — the ~660-pair N+1 on a big configurable.
         $ruleMap = $this->getRulePriceMapByGroup($childIds);
@@ -1445,7 +1445,7 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
                 'thumbnail' => $child->getThumbnail() ?? '',
                 // Serve catalog-rule/tier price from the doc. Always set the keys (even empty)
                 // so the shell's price models short-circuit instead of falling through to SQL:
-                // a missing key means "not indexed" → native DB fallback (the N+1 we're killing).
+                // a missing key means "not indexed" native DB fallback (the N+1 we're killing).
                 // catalog_rule_prices is the per-group map; catalog_rule_price is the group-0
                 // scalar kept for backward compatibility.
                 'catalog_rule_prices' => $ruleMap[$cid] ?? [],
@@ -1565,8 +1565,8 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
     private function getCustomAttributesArray(\Magento\Catalog\Model\Product $product, array $configurableOptions): array
     {
         // A parent's child record only needs the fields the read path consumes:
-        //  - the super-attribute option ids (raw) → variant matching + swatch / jsonConfig,
-        //  - type_id and status(label) → child shell type + getAllowProducts' enabled check.
+        //  - the super-attribute option ids (raw) variant matching + swatch / jsonConfig,
+        //  - type_id and status(label) child shell type + getAllowProducts' enabled check.
         // Every OTHER attribute a child carries is served from the child's OWN doc when a variant
         // is actually selected (getProductByAttributes reloads it by id), so indexing all ~50
         // attributes per child was pure bloat — and the dominant cost of projecting a big

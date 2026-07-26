@@ -11,7 +11,7 @@ class CatalogRulePrice extends CoreCatalogRulePrice
     {
         $product = $this->getProduct();
 
-        // ✅ Serve the catalog-rule price straight from the indexed doc, NEVER from SQL, and
+        // Serve the catalog-rule price straight from the indexed doc, NEVER from SQL, and
         // resolve it for the CURRENT customer group. The indexer writes a per-group
         // `catalog_rule_prices` map on every shell (parent AND each configurable child), so a
         // guest, a Wholesale customer and a Retailer each get their own rule price. Returning

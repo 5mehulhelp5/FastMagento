@@ -55,7 +55,7 @@ class StockSyncer
      *
      * A single storefront request can trigger many stock-item saves for the SAME products —
      * e.g. a 3rd-party quantity-validator observer saves each quote item's stock on cart load,
-     * which cascades through MSI's legacy→source-item sync into this syncer. Reprojecting a
+     * which cascades through MSI's legacy->source-item sync into this syncer. Reprojecting a
      * large configurable (hundreds of children) inline, per save, is what makes the cart and
      * checkout crawl. Instead we accumulate the affected ids and flush ONE reprojection after
      * the response is sent to the client (fastcgi_finish_request under php-fpm), so the shopper
@@ -132,7 +132,7 @@ class StockSyncer
      * else can drift.
      *
      * Fail-safe: any doc missing/partial in the index, any product/listed child without a live
-     * stock row (e.g. a just-deleted child), a bulk failure, or any Throwable → that id (or the
+     * stock row (e.g. a just-deleted child), a bulk failure, or any Throwable that id (or the
      * whole set on a hard failure) is RETURNED for a full reprojection, so the index is never
      * left stale.
      *
@@ -163,7 +163,7 @@ class StockSyncer
                 }
                 $sources[$id] = $doc['_source'];
             }
-            // Any requested id the mget didn't account for at all → reproject to be safe.
+            // Any requested id the mget didn't account for at all reproject to be safe.
             foreach ($ids as $id) {
                 if (!isset($sources[$id]) && !isset($misses[$id])) {
                     $misses[$id] = $id;
@@ -197,7 +197,7 @@ class StockSyncer
             }
 
             if ($docsToIndex && !$this->bulkIndexStock($client, $indexName, $docsToIndex)) {
-                // Bulk write failed → reproject everything we tried to patch.
+                // Bulk write failed reproject everything we tried to patch.
                 foreach ($docsToIndex as $doc) {
                     $misses[(int) $doc['id']] = (int) $doc['id'];
                 }
@@ -212,7 +212,7 @@ class StockSyncer
 
     /**
      * Apply the live stock of one product to its doc _source. Returns the patched _source, or
-     * null if the doc is too partial to patch safely (→ caller reprojects it fully).
+     * null if the doc is too partial to patch safely (caller reprojects it fully).
      *
      * @param array<string, mixed> $src
      * @param array<int, array{qty:float,is_in_stock:int}> $live
@@ -221,7 +221,7 @@ class StockSyncer
     private function patchDocStock(int $id, array $src, array $live): ?array
     {
         // Product's own live stock must be readable, and the doc must already carry a
-        // stock_item sub-doc (a shell without one isn't checkout-safe) → else reproject.
+        // stock_item sub-doc (a shell without one isn't checkout-safe) else reproject.
         if (!isset($live[$id])
             || empty($src['extension_attributes']['stock_item'])
             || !is_array($src['extension_attributes']['stock_item'])
@@ -240,7 +240,7 @@ class StockSyncer
         // Composite parents carry child_products[] whose per-child is_in_stock/stock_qty a full
         // reproject fills from the children's cataloginventory_stock_item rows. Patch them the
         // same way. If the doc is composite but has no child_products, or a listed child has no
-        // live row (e.g. it was just deleted), we can't fully patch it → reproject.
+        // live row (e.g. it was just deleted), we can't fully patch it reproject.
         $type = (string) ($src['type_id'] ?? '');
         if (in_array($type, ['configurable', 'grouped', 'bundle'], true)) {
             if (empty($src['child_products']) || !is_array($src['child_products'])) {
@@ -396,7 +396,7 @@ class StockSyncer
 
             $changed = [];
             foreach ($ids as $id) {
-                // No live stock row or not indexed → can't prove it's unchanged → reproject.
+                // No live stock row or not indexed can't prove it's unchanged reproject.
                 if (!isset($live[$id]) || !isset($indexed[$id])) {
                     $changed[] = $id;
                     continue;

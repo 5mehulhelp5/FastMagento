@@ -77,7 +77,7 @@ class EfficiencyScan extends Command
             ));
         }
         $output->writeln('');
-        $output->writeln('<info>Report written.</info> View it under Admin → FastMagento → Extension Efficiency.');
+        $output->writeln('<info>Report written.</info> View it under Admin > FastMagento > Extension Efficiency.');
 
         return Command::SUCCESS;
     }

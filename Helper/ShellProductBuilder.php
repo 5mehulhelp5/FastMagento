@@ -105,7 +105,7 @@ class ShellProductBuilder
         $product->setStoreId($doc['store_id'] ?? 0);
         $product->setWebsiteIds($doc['website_ids'] ?? [0]);
 
-        // Indexed canonical request_path → Magento\Catalog\Model\Product\Url::getUrl() uses it
+        // Indexed canonical request_path Magento\Catalog\Model\Product\Url::getUrl() uses it
         // directly and skips the url_rewrite DB finder (per-item URL N+1 on product grids/lists).
         if (!empty($doc['request_path'])) {
             $product->setData('request_path', $doc['request_path']);
@@ -229,14 +229,14 @@ class ShellProductBuilder
 
         $product->setOsDoc($doc);
 
-        // ✅ Set Core Product Fields
+        // Set Core Product Fields
         $product->setId($doc['entity_id'] ?? 0);
         $product->setSku($doc['sku'] ?? null);
         $product->setName($doc['name'] ?? null);
         $product->setStoreId($doc['store_id'] ?? 0);
         $product->setWebsiteIds($doc['website_ids'] ?? [0]);
 
-        // Indexed canonical request_path → Magento\Catalog\Model\Product\Url::getUrl() uses it
+        // Indexed canonical request_path Magento\Catalog\Model\Product\Url::getUrl() uses it
         // directly and skips the url_rewrite DB finder (per-item URL N+1 on product grids/lists).
         if (!empty($doc['request_path'])) {
             $product->setData('request_path', $doc['request_path']);
@@ -246,7 +246,7 @@ class ShellProductBuilder
             $product->setTypeId($doc['type_id']);
         }
 
-        // ✅ Set Status and Visibility as integers (critical for canShow checks)
+        // Set Status and Visibility as integers (critical for canShow checks)
         if (isset($doc['status'])) {
             $product->setStatus((int)$doc['status']);
         }
@@ -254,7 +254,7 @@ class ShellProductBuilder
             $product->setVisibility((int)$doc['visibility']);
         }
 
-// ✅ Set Pricing Data
+// Set Pricing Data
         $regular = isset($doc['price']) ? (float)$doc['price'] : 0.0;
         $product->setPrice($regular);
         $product->setData('price', $regular);
@@ -267,14 +267,14 @@ class ShellProductBuilder
         $product->setSpecialPrice($special);
         $product->setData('special_price', $special);
 
-// ✅ Set Stock Data
+// Set Stock Data
         if (!empty($doc['stock_data']) && is_array($doc['stock_data'])) {
             foreach ($doc['stock_data'] as $key => $value) {
                 $product->setData("stock_$key", $value);
             }
         }
 
-// ✅ Set Configurable Options
+// Set Configurable Options
         if (!empty($doc['configurable_options_' . $doc['entity_id']]) && is_array($doc['configurable_options_' . $doc['entity_id']])) {
             $configurableOptions = $doc['configurable_options_' . $doc['entity_id']];
 
@@ -325,7 +325,7 @@ class ShellProductBuilder
             }
         }
 
-// ✅ Set Tier Prices
+// Set Tier Prices
         if (!empty($doc['tier_prices'])) {
             $product->setData('tier_prices', $doc['tier_prices']);
         }
@@ -338,17 +338,17 @@ class ShellProductBuilder
         // short-circuits and never touches the DB.
         $product->setData('tier_price', $this->mapTierPricesToNative($doc['tier_prices'] ?? []));
 
-// ✅ Set Catalog Rule Prices
+// Set Catalog Rule Prices
         if (!empty($doc['catalog_rule_price'])) {
             $product->setData('catalog_rule_price', $doc['catalog_rule_price']);
         }
 
-// ✅ Set Category Names
+// Set Category Names
         if (!empty($doc['category_names'])) {
             $product->setData('category_names', $doc['category_names']);
         }
 
-// ✅ Set Media Gallery Data
+// Set Media Gallery Data
         if (!empty($doc['media_gallery']) && is_array($doc['media_gallery'])) {
             if (!$product->hasData('media_gallery')) {
                 $product->setData('media_gallery', []);
@@ -356,7 +356,7 @@ class ShellProductBuilder
             $product = $this->setMediaGallery($product, $doc['media_gallery']);
         }
 
-// ✅ Set All Other Custom Attributes Dynamically
+// Set All Other Custom Attributes Dynamically
         if (!empty($doc['attributes']) && is_array($doc['attributes'])) {
             foreach ($doc['attributes'] as $attributeCode => $value) {
                 $value = $this->normalizeAttributeValue($value);
@@ -364,7 +364,7 @@ class ShellProductBuilder
             }
         }
 
-// ✅ Child docs (configurable/grouped/bundle members) carry their data under
+// Child docs (configurable/grouped/bundle members) carry their data under
 //    custom_attributes, with the super-attribute option ids kept raw (e.g. color=86,
 //    size=89). Map them so getAllowProducts() sees an ENABLED child and the
 //    configurable/swatch jsonConfig can match each child to its option + price.
@@ -372,7 +372,7 @@ class ShellProductBuilder
             $this->hydrateChildFromCustomAttributes($product, $doc);
         }
 
-// ✅ Set Child Products
+// Set Child Products
         if (!empty($doc['child_products']) && is_array($doc['child_products'])) {
             $product->setData('child_products', $doc['child_products']);
 
@@ -439,7 +439,7 @@ class ShellProductBuilder
             }
         }
 
-// ✅ Loop Through Remaining Keys and Set Any Unhandled Values
+// Loop Through Remaining Keys and Set Any Unhandled Values
         $handledKeys = [
             'entity_id', 'sku', 'name', 'store_id', 'website_ids', 'type_id',
             'price', 'final_price', 'special_price', 'stock_data', 'configurable_options',
@@ -454,12 +454,12 @@ class ShellProductBuilder
                 continue;
             }
 
-            // ✅ Set Remaining Data Dynamically
+            // Set Remaining Data Dynamically
             $product->setData($key, $value);
         }
 
 
-        // ✅ Downloadable: hydrate Link/Sample models from the OS doc so native
+        // Downloadable: hydrate Link/Sample models from the OS doc so native
         // getLinks()/getSamples() serve them without a DB round-trip.
         if (($doc['type_id'] ?? null) === 'downloadable') {
             $this->hydrateDownloadable($product, $doc);
@@ -472,8 +472,8 @@ class ShellProductBuilder
 
         // Final guard: drop the product type's RUNTIME object caches that a build step (or a
         // stale indexed doc) may have left as arrays in the model data. Served back they make
-        // core treat arrays as attribute objects → the cart page 500s in getUsedProductAttributes
-        // → getId(). Core rebuilds them live from the OS-hydrated data when next needed.
+        // core treat arrays as attribute objects the cart page 500s in getUsedProductAttributes
+        // getId(). Core rebuilds them live from the OS-hydrated data when next needed.
         $product->stripRuntimeCaches();
 
         return $product;
@@ -571,7 +571,7 @@ class ShellProductBuilder
             $product->setDownloadableLinks($links);
             $product->setDownloadableSamples($samples);
         } catch (\Throwable $e) {
-            // Leave downloadable data unset → native DB fallback renders correctly.
+            // Leave downloadable data unset native DB fallback renders correctly.
         }
     }
 

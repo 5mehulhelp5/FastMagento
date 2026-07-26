@@ -186,7 +186,7 @@ class CatalogRuleSyncer
 
     /**
      * Apply the fresh rule prices to one doc _source. Returns the patched _source, or null if the
-     * doc is too partial to patch safely (composite parent with no child_products) → reproject.
+     * doc is too partial to patch safely (composite parent with no child_products) reproject.
      *
      * @param array<string, mixed> $src
      * @param array<int, array<int, float>> $ruleMap product_id => [group_id => rule_price]

@@ -279,7 +279,7 @@ $sevClass = ['critical' => 'crit', 'warn' => 'warn', 'good' => 'good'];
                 ?>
                 <div class="cmp-row">
                     <div class="cmp-name"><?= $block->escapeHtml($im['label']) ?>
-                        <small><?= $block->escapeHtml($block->areaUnit($im['area'])) ?> · <?= $block->escapeHtml(__('%1 core → %2 total', number_format($core, 1), number_format($with, 1))) ?></small></div>
+                        <small><?= $block->escapeHtml($block->areaUnit($im['area'])) ?> · <?= $block->escapeHtml(__('%1 core -> %2 total', number_format($core, 1), number_format($with, 1))) ?></small></div>
                     <div class="track" title="<?= $block->escapeHtmlAttr(__('%1 queries/op, %2% from extensions', number_format($with, 1), (int) $im['pct'])) ?>">
                         <div class="fill core" style="width:<?= $block->barWidthPct($core, $mx) ?>%;"><?php if ($core > 0): ?><?= $block->escapeHtml(number_format($core, 1)) ?><?php endif; ?></div>
                         <?php if ($tax > 0): ?>

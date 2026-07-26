@@ -62,14 +62,14 @@ class OpenSearchStockRegistry implements StockRegistryInterface
 
     public function getStockItem($productId, $scopeId = null): StockItemInterface
     {
-        // ✅ Check if product exists in registry
+        // Check if product exists in registry
         $product = $this->registry->registry('current_product');
 
         if ($product && (int)$product->getId() === (int)$productId) {
             return $this->buildStockItemFromRegistry($product);
         }
 
-        // ❌ If not found in registry, fallback to Magento Core stock management
+        // If not found in registry, fallback to Magento Core stock management
         return $this->stockRegistryProvider->getStockItem(
             $productId,
             $scopeId ?? $this->stockConfiguration->getDefaultScopeId()
@@ -158,7 +158,7 @@ class OpenSearchStockRegistry implements StockRegistryInterface
     /**
      * Resolve a sku to its entity_id. This StockRegistry is a shared (singleton) instance, and
      * MSI's PreloadCache observer calls the *BySku methods once per cart line on every quote
-     * load — each previously firing a fresh `catalog_product_entity WHERE sku=?` query. sku→id
+     * load — each previously firing a fresh `catalog_product_entity WHERE sku=?` query. sku->id
      * is immutable within a request, so cache it: collapses that per-line N+1 to one lookup per
      * distinct sku (repeats across collectTotals recollects/observers become free).
      */
@@ -185,7 +185,7 @@ class OpenSearchStockRegistry implements StockRegistryInterface
 
 
     /**
-     * ✅ Retrieve stock for different product types (Simple, Configurable, Grouped, Bundle).
+     * Retrieve stock for different product types (Simple, Configurable, Grouped, Bundle).
      */
     private function buildStockItemFromRegistry($product): StockItemInterface
     {
@@ -203,13 +203,13 @@ class OpenSearchStockRegistry implements StockRegistryInterface
             );
         }
 
-        // ✅ Simple Products: Use direct stock data
+        // Simple Products: Use direct stock data
         if ($product->getTypeId() === $this->productType::TYPE_SIMPLE) {
             $stockItem->setIsInStock($product->getData('is_in_stock') ?? false);
             $stockItem->setQty($product->getData('stock_qty') ?? 0);
         }
 
-        // ✅ Configurable Products: Check if any child is in stock
+        // Configurable Products: Check if any child is in stock
         elseif ($product->getTypeId() === Configurable::TYPE_CODE) {
             $childProducts = $product->getChildProducts();
             $isInStock = false;
@@ -226,7 +226,7 @@ class OpenSearchStockRegistry implements StockRegistryInterface
             $stockItem->setQty($stockQty);
         }
 
-        // ✅ Grouped Products: Check if any grouped product is in stock
+        // Grouped Products: Check if any grouped product is in stock
         elseif ($product->getTypeId() === Grouped::TYPE_CODE) {
             $associatedProducts = $product->getAssociatedProducts();
             $isInStock = false;
@@ -243,7 +243,7 @@ class OpenSearchStockRegistry implements StockRegistryInterface
             $stockItem->setQty($stockQty);
         }
 
-        // ✅ Bundle Products: Check if any bundle item is in stock
+        // Bundle Products: Check if any bundle item is in stock
         elseif ($product->getTypeId() === ProductType::TYPE_BUNDLE) {
             $bundleItems = $product->getBundleChildren();
             $isInStock = false;
@@ -263,7 +263,7 @@ class OpenSearchStockRegistry implements StockRegistryInterface
         return $stockItem;
     }
     /**
-     * ✅ Build Stock Status from Registry Data.
+     * Build Stock Status from Registry Data.
      */
     private function buildStockStatusFromRegistry($product): StockStatusInterface
     {

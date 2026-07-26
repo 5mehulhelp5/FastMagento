@@ -19,7 +19,7 @@ class View extends Template
     }
 
     /**
-     * ✅ Get Product Data from OpenSearch (Registered in Controller)
+     * Get Product Data from OpenSearch (Registered in Controller)
      */
     public function getProduct()
     {

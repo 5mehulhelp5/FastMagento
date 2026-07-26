@@ -32,7 +32,7 @@ class OpenSearchAdapter implements AdapterInterface
         $sortingPriorities = explode(',', (string) $this->scopeConfig->getValue(self::XML_PATH_SORTING_PRIORITIES));
         $indexPrefix = (string) $this->scopeConfig->getValue(self::XML_PATH_INDEX_PREFIX);
 
-        // 🔹 Use Magento's connection manager to get the OpenSearch connection
+        // Use Magento's connection manager to get the OpenSearch connection
         $connection = $this->connectionManager->getConnection();
         if (!$connection) {
             throw new \Exception('Failed to retrieve OpenSearch connection.');
@@ -57,7 +57,7 @@ class OpenSearchAdapter implements AdapterInterface
             ];
         }
 
-        // 🔹 Instead of getClient(), use OpenSearch connection directly
+        // Instead of getClient(), use OpenSearch connection directly
         $response = $connection->search($query);
         $documents = [];
 

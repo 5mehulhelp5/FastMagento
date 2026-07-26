@@ -41,7 +41,7 @@ class ConfigurableLineNamePlugin
             return $result;
         }
         if ($this->scopeConfig->getValue(self::XML_PATH_NAME_SOURCE, ScopeInterface::SCOPE_STORE) !== 'child') {
-            return $result; // 'parent' (default) → keep the configurable name
+            return $result; // 'parent' (default) keep the configurable name
         }
 
         // The purchased simple is the parent line's single child quote item.

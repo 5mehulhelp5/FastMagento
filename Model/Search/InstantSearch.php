@@ -161,13 +161,13 @@ class InstantSearch
     {
         $fields = $this->relevanceConfig->getBoostedFields();
         $expanded = $this->expandQuery($query);
-        $operator = $this->operatorParams();   // any/all/most → per-clause term-coverage rule
+        $operator = $this->operatorParams();   // any/all/most per-clause term-coverage rule
 
         $phraseBoost = $this->relevanceConfig->getPhraseMatchBoost();
         $typo = $this->relevanceConfig->isTypoToleranceEnabled();
 
         // Candidate set = the cleaned query PLUS every synonym variant, treated as EQUIVALENT and
-        // scored identically. Because synonyms are symmetric ("frontend" ⇄ "front end" produce
+        // scored identically. Because synonyms are symmetric ("frontend" "front end" produce
         // the same {frontend, front end} set), two queries that mean the same thing yield the same
         // results in the same order — no synonym demotion. Each candidate gets the full scoring
         // treatment below (as-you-type prefix + full-field match + phrase + all-terms).
@@ -255,9 +255,9 @@ class InstantSearch
 
     /**
      * multi_match term-coverage params for the configured operator, applied per scoring clause:
-     *  - any  → OR (a single term is enough; today's behaviour)
-     *  - most → OR + minimum_should_match 75% (majority of terms must match)
-     *  - all  → AND (every term must match)
+     *  - any  OR (a single term is enough; today's behaviour)
+     *  - most OR + minimum_should_match 75% (majority of terms must match)
+     *  - all  AND (every term must match)
      *
      * @return array<string, string>
      */
@@ -295,8 +295,8 @@ class InstantSearch
      * Strip stop words and build synonym variants via PHRASE-level substitution (capped).
      *
      * Substitution works on the whole raw query at the word-boundary level, so a group term
-     * may be multi-word and may span/split tokens — this is what lets "frontend" ↔ "front end",
-     * "side by side" ↔ "sxs" / "utv", and "a-arm" ↔ "control arm" all work (a token-level swap
+     * may be multi-word and may span/split tokens — this is what lets "frontend" "front end",
+     * "side by side" "sxs" / "utv", and "a-arm" "control arm" all work (a token-level swap
      * cannot join or split words). Each produced variant is itself stop-word-stripped so it
      * stays clean under the AND/most operator. Substitution runs against the raw (not
      * stop-word-stripped) query so multi-word phrases like "side by side" survive intact.
@@ -430,7 +430,7 @@ class InstantSearch
     }
 
     /**
-     * One mget against the serving index → [entity_id => _source] for the docs that are present.
+     * One mget against the serving index [entity_id => _source] for the docs that are present.
      *
      * @param mixed $client
      * @param int[] $ids
@@ -466,8 +466,8 @@ class InstantSearch
         $regular = (float) ($source['price'] ?? $price);
         $image = $this->imageUrl((string) ($source['small_image'] ?? $source['thumbnail'] ?? $source['image'] ?? ''));
 
-        // Search → variant swatch pre-selection: when a configurable hit's query words
-        // pin a specific swatch combination (e.g. "red 34c" → color=Red, size=34C), carry
+        // Search variant swatch pre-selection: when a configurable hit's query words
+        // pin a specific swatch combination (e.g. "red 34c" color=Red, size=34C), carry
         // those option ids in the result URL so the PDP's native swatch renderer opens with
         // them selected (correct image/price), and show the matched child's image on the card.
         $selectedOptions = [];
@@ -511,7 +511,7 @@ class InstantSearch
      * Derived from data already in the _source (no reindex): each child's
      * custom_attributes hold the raw super-attribute option ids, swatch_options maps
      * (attributeId, optionId) => label, and configurable_options_<id> ties attribute
-     * code ↔ id. A precomputed `variants` array on the doc (if a future indexer adds one)
+     * code id. A precomputed `variants` array on the doc (if a future indexer adds one)
      * is used as-is.
      *
      * @param array<string, mixed> $source

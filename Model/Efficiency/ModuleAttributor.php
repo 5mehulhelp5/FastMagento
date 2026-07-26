@@ -75,7 +75,7 @@ class ModuleAttributor
      * merely subclasses a core model / customer-data source and inherits a method unchanged is not
      * responsible for the queries that core method fires — blaming it produces false positives.
      * (Concretely: Webkul's Cart customer-data rewrite only overrides getRecentItems(), yet it
-     * would otherwise "own" core's getSectionData() → checkout-session/totals/quote_address queries
+     * would otherwise "own" core's getSectionData() checkout-session/totals/quote_address queries
      * simply because it is the instantiated class.) If the method is inherited from core, this
      * returns the core (first-party) module, so the frame is skipped as not-third-party.
      *
