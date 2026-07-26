@@ -133,4 +133,33 @@
                 sortOrder="10"/>
     </type>
 
+    <!-- When aggregations are NOT OS-served (category browse, or any native-served search) the
+         resolver above defers to core's Attribute layerBuilder, which fatals with "Undefined
+         array key attribute_type" on any aggregated bucket whose attribute has no filterable
+         EAV option metadata: core's AttributeOptionProvider keys off eav_attribute_option rows,
+         so an attribute the engine aggregates but that has none yields $attribute = [] and the
+         whole `aggregations` field 500s. That is invisible to Luma (different layered-nav path)
+         but breaks every GraphQL category page — headless clients render the errored category
+         as a 404.
+
+         Every filterable product attribute on this catalog hits that trap (verified against the
+         OpenSearch index for a populated category):
+           - rating_filter — virtual (Jadog Source\Rating), zero eav options
+           - seller_id      — Webkul marketplace backend model, zero eav options
+           - manufacturer   — zero eav options, only an empty "0" bucket indexed
+           - color          — zero eav options (defensive; no bucket today)
+         None can produce a label-resolvable facet, so skip them all. Merged onto core's own
+         price_bucket/category_bucket defaults, so price and category facets still build. Revisit
+         if any of these is ever given real, option-backed EAV configuration. -->
+    <type name="Magento\CatalogGraphQl\DataProvider\Product\LayeredNavigation\Builder\Attribute">
+        <arguments>
+            <argument name="bucketNameFilter" xsi:type="array">
+                <item name="rating_filter" xsi:type="string">rating_filter_bucket</item>
+                <item name="seller_id" xsi:type="string">seller_id_bucket</item>
+                <item name="manufacturer" xsi:type="string">manufacturer_bucket</item>
+                <item name="color" xsi:type="string">color_bucket</item>
+            </argument>
+        </arguments>
+    </type>
+
 </config>
