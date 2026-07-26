@@ -24,7 +24,7 @@
                      enable_realtime_indexing / enable_cron_indexing toggles were never read by any
                      code, so they were removed to avoid implying a control that did nothing. -->
 
-                <!-- ✅ New Setting: OpenSearch Index Prefix -->
+                <!-- New Setting: OpenSearch Index Prefix -->
                 <field id="opensearch_index_prefix" translate="label" type="text" sortOrder="30" showInDefault="1" showInWebsite="1" showInStore="1">
                     <label>Product Index Suffix</label>
                     <comment>Suffix for the FastMagento product index (&lt;engine prefix&gt;_&lt;suffix&gt;). Default "products".</comment>
@@ -38,7 +38,7 @@
                 <field id="instant_product_update" translate="label comment" type="select" sortOrder="50" showInDefault="1" showInWebsite="1" showInStore="1">
                     <label>Instant Product Update on Save</label>
                     <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
-                    <comment><![CDATA[When on, saving a product <strong>immediately</strong> reprojects it (and any configurable/grouped/bundle parent) into OpenSearch and purges its full-page cache — so staff see the change on the storefront at once, without waiting for the scheduled indexer or cache to catch up. Best-effort: a failure is logged and never blocks the save. <em>Adds a reprojection + cache purge to every product save (including mass actions and imports)</em>, so it's off by default.]]></comment>
+                    <comment><![CDATA[When on, a <strong>manual single-product edit in the admin</strong> (the product Edit form) <strong>immediately</strong> reprojects that product (and any configurable/grouped/bundle parent) into OpenSearch and purges its full-page cache - so staff see the change on the storefront at once, without waiting for the scheduled indexer or cache to catch up. Best-effort: a failure is logged and never blocks the save.<br/><br/><strong>Scope:</strong> only the admin single-product Edit form is served instantly. To avoid a mass save fanning out into thousands of reprojections, everything else follows the normal scheduled (mview) indexer &amp; cache flow: <em>REST/GraphQL API writes, admin bulk actions (mass status/delete, Update Attributes), CSV imports, and cron/CLI reindex</em>. Default Yes.]]></comment>
                 </field>
 
                 <field id="instant_purge_categories" translate="label comment" type="select" sortOrder="60" showInDefault="1" showInWebsite="1" showInStore="1">
@@ -52,7 +52,7 @@
             <!-- Instant Search + Relevance -->
             <group id="search" translate="label" sortOrder="20" showInDefault="1" showInWebsite="1" showInStore="1">
                 <label>Instant Search &amp; Relevance</label>
-                <comment><![CDATA[Controls <strong>what a query matches and in what order</strong>. A query flows: clean (stop words) → expand (synonyms) → match (weighted fields, with the Operator &amp; Typo rules) → boost (phrase / all-terms / in-stock) → sort (custom ranking). Full breakdown with worked examples in the extension's <em>docs/SETTINGS.md</em>. Re-run <em>indexer:reindex catalogsearch_fulltext</em> after changing searchable attributes or the AI keyword layer.]]></comment>
+                <comment><![CDATA[Controls <strong>what a query matches and in what order</strong>. A query flows: clean (stop words) -&gt; expand (synonyms) -&gt; match (weighted fields, with the Operator &amp; Typo rules) -&gt; boost (phrase / all-terms / in-stock) -&gt; sort (custom ranking). Full breakdown with worked examples in the extension's <em>docs/SETTINGS.md</em>. Re-run <em>indexer:reindex catalogsearch_fulltext</em> after changing searchable attributes or the AI keyword layer.]]></comment>
 
                 <field id="searchable_attributes" translate="label comment" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="1">
                     <label>Searchable Attributes &amp; Weights</label>
@@ -203,6 +203,24 @@
                 </field>
             </group>
 
+            <!-- GraphQL Serving -->
+            <group id="graphql" translate="label" sortOrder="29" showInDefault="1" showInWebsite="1" showInStore="1">
+                <label>GraphQL Serving</label>
+                <comment><![CDATA[Serves the storefront GraphQL API (headless / PWA) from OpenSearch the same way the Luma/Breeze storefront already is - so a GraphQL frontend gets the same fast, FastMagento-tuned experience. Both default On, with a hard native fallback on any miss so a query never breaks.]]></comment>
+
+                <field id="os_serve_products" translate="label comment" type="select" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Serve GraphQL Product Data from OpenSearch</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment><![CDATA[<strong>On by default. Transparent.</strong> Hydrates products(), category products, related/up-sell/cross-sell and PDP GraphQL reads from the OpenSearch index instead of the native MySQL EAV load, eliminating the per-item catalog-rule + tier-price N+1. The result set, order and field values are identical to native Magento - this only changes where the data is read from. Any product missing/partial in the index falls back to the native load automatically. Set to No to force the fully native GraphQL product path.]]></comment>
+                </field>
+
+                <field id="os_serve_search" translate="label comment" type="select" sortOrder="20" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Serve GraphQL Fulltext Search from OpenSearch</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment><![CDATA[<strong>On by default.</strong> Routes GraphQL <em>products(search:"...")</em> through FastMagento's OpenSearch relevance engine - the same engine, synonyms, typo tolerance and ranking the storefront search uses - so headless search matches the storefront and is tuned from the <em>Instant Search &amp; Relevance</em> settings above. Covered: relevance-sorted search, price and name sorts, and single-category filtering. Falls back to the native search for other sorts, multi-attribute filters, and aggregation (layered-nav) queries, and on any error - it never breaks a query. Set to No to use Magento's native GraphQL search relevance.]]></comment>
+                </field>
+            </group>
+
             <!-- Cache Optimization -->
             <group id="cache" translate="label" sortOrder="30" showInDefault="1" showInWebsite="1" showInStore="1">
                 <label>Cache Optimization</label>
@@ -239,7 +257,7 @@
                 <field id="show" translate="label comment" type="select" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="1">
                     <label>Show "Powered by FastMagento" credit</label>
                     <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
-                    <comment><![CDATA[<strong>Please consider leaving this on 🙏</strong> — a small, visible footer credit is the only thing we ask in return for the extension, and it helps other merchants discover it. If it doesn't fit your footer, <strong>please restyle it instead of removing it</strong>: it's plain and class-based, so a couple of lines of CSS in your theme reskin it — for example:<br><br><code>.fm-credit { opacity: 1; font-size: 12px; color: #8a8f98; }<br>.fm-credit__link { color: #your-accent; }<br>.fm-credit__sep { display: none; }</code><br><br>You can also override the template <code>ParkkTech_FastMagento::footer-credit.phtml</code> in your own theme for a fully custom look. Thank you for supporting the project!]]></comment>
+                    <comment><![CDATA[<strong>Please consider leaving this on</strong> — a small, visible footer credit is the only thing we ask in return for the extension, and it helps other merchants discover it. If it doesn't fit your footer, <strong>please restyle it instead of removing it</strong>: it's plain and class-based, so a couple of lines of CSS in your theme reskin it — for example:<br><br><code>.fm-credit { opacity: 1; font-size: 12px; color: #8a8f98; }<br>.fm-credit__link { color: #your-accent; }<br>.fm-credit__sep { display: none; }</code><br><br>You can also override the template <code>ParkkTech_FastMagento::footer-credit.phtml</code> in your own theme for a fully custom look. Thank you for supporting the project!]]></comment>
                 </field>
             </group>
         </section>

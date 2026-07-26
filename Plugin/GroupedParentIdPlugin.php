@@ -2,12 +2,13 @@
 
 namespace ParkkTech\FastMagento\Plugin;
 
+use Magento\Framework\App\Area;
 use Magento\Framework\App\State;
 use Magento\GroupedProduct\Model\Product\Type\Grouped;
 use ParkkTech\FastMagento\Model\OpenSearch\ParentIdResolver;
 
 /**
- * Serve Grouped::getParentIdsByChild() from OpenSearch on the frontend.
+ * Serve Grouped::getParentIdsByChild() from OpenSearch on the frontend and graphql areas.
  *
  * Product-slider widgets call getParentIdsByChild() per product for BOTH the configurable
  * and grouped types; the grouped call is a catalog_product_link query, so a slider over N
@@ -21,6 +22,9 @@ use ParkkTech\FastMagento\Model\OpenSearch\ParentIdResolver;
  */
 class GroupedParentIdPlugin
 {
+    /** OS-serve on the customer-facing storefront (frontend) and headless GraphQL areas. */
+    private const SERVABLE_AREAS = [Area::AREA_FRONTEND, Area::AREA_GRAPHQL];
+
     public function __construct(
         private readonly State $appState,
         private readonly ParentIdResolver $parentIdResolver
@@ -36,7 +40,7 @@ class GroupedParentIdPlugin
     public function aroundGetParentIdsByChild(Grouped $subject, callable $proceed, $childId)
     {
         try {
-            if ($this->appState->getAreaCode() !== 'frontend') {
+            if (!in_array($this->appState->getAreaCode(), self::SERVABLE_AREAS, true)) {
                 return $proceed($childId);
             }
             if ($this->parentIdResolver->getOsParentIds((int)$childId) !== null) {

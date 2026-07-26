@@ -95,31 +95,31 @@ class Configurable extends CoreConfigurable
     }
 
     /**
-     * ✅ Get Configurable Attributes (Check Registry First, then Core Database)
+     * Get Configurable Attributes (Check Registry First, then Core Database)
      */
     public function getConfigurableAttributes($product)
     {
         $registryKey = 'configurable_options_' . $product->getId();
 
-        // ✅ Check if data is in registry
+        // Check if data is in registry
         if ($this->registry->registry($registryKey)) {
             return $this->registry->registry($registryKey);
         }
 
-        // ✅ Fallback to Magento Core Database if not found in registry
+        // Fallback to Magento Core Database if not found in registry
         $configurableAttributes = parent::getConfigurableAttributes($product);
 
-        // ✅ Cache in registry for future use
+        // Cache in registry for future use
         $this->registry->register($registryKey, $configurableAttributes);
 
         return $configurableAttributes;
     }
 
     /**
-     * ✅ Salability from the OpenSearch-derived data instead of a DB linked-product
+     * Salability from the OpenSearch-derived data instead of a DB linked-product
      * collection. Core Configurable::isSalable() runs getLinkedProductCollection() +
      * salableProcessor (product SQL) and, for an OS-hydrated shell whose store/link-field
-     * differ from a native load, returns 0 → the PDP shows "unavailable" and the options
+     * differ from a native load, returns 0 the PDP shows "unavailable" and the options
      * block never renders. The ShellProductBuilder already sets is_salable on the parent
      * from its children's stock, so honour that flag; only fall back to core when it is
      * absent (e.g. a natively-loaded configurable that never went through the shell).
@@ -138,7 +138,7 @@ class Configurable extends CoreConfigurable
     }
 
     /**
-     * ✅ Resolve the child product for a super-attribute selection from the OpenSearch-
+     * Resolve the child product for a super-attribute selection from the OpenSearch-
      * hydrated children instead of getUsedProductCollection(). Core matches by running a DB
      * used-product collection with addAttributeToFilter(); for a shell parent that collection
      * yields nothing, so add-to-cart fails with "You need to choose options". Here we compare
@@ -183,7 +183,7 @@ class Configurable extends CoreConfigurable
     }
 
     /**
-     * ✅ Get Used Child Products (Check Registry First, then Core Database)
+     * Get Used Child Products (Check Registry First, then Core Database)
      */
     public function getUsedProducts($configurableProduct, $requiredAttributeIds = null)
     {
@@ -198,11 +198,12 @@ class Configurable extends CoreConfigurable
             return $this->registry->registry('child_products');
         }
 
-        // ✅ Fallback to Magento Core Database if not found in registry
+        // Fallback to Magento Core Database if not found in registry
         $usedProducts = parent::getUsedProducts($configurableProduct);
 
-        // ✅ Cache in registry for future use
-        $this->registry->register($registryKey, $usedProducts);
+        // Cache in registry for future use (per-id key, matching the read above; the previous
+        // $registryKey was undefined in this method, so the DB-fallback result was never cached).
+        $this->registry->register($perIdKey, $usedProducts);
 
         return $usedProducts;
     }

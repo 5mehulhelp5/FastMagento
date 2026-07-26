@@ -1,0 +1,126 @@
+<?xml version="1.0"?>
+<config xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:framework:ObjectManager/etc/config.xsd">
+
+    <!--
+       GRAPHQL SCOPE — mirrors the catalog-read interceptors from etc/frontend/di.xml so
+       storefront GraphQL (products/category resolvers) serves from OpenSearch too, not just
+       the Luma/Hyva storefront. See Plugin\GraphQl\ProductCollectionOsHydrationPlugin for the
+       collection-level hydration that makes the price/stock/configurable overrides below
+       actually fire (they all gate on `$product instanceof ShellNoEavProduct`).
+    -->
+
+    <!-- Serve the GraphQL products()/category-products() collection load from OpenSearch —
+         the collection-level equivalent of FrontendProductCollectionPlugin/FrontendProductPlugin.
+         Flag-gated (fastmagento/graphql/os_serve_products), hard native fallback. -->
+    <type name="Magento\Catalog\Model\ResourceModel\Product\Collection">
+        <plugin name="fastmagento_graphql_product_collection_os_hydration"
+                type="ParkkTech\FastMagento\Plugin\GraphQl\ProductCollectionOsHydrationPlugin"
+                sortOrder="10"/>
+    </type>
+
+    <!-- Override TierPrice/CatalogRulePrice/SpecialPrice for graphql too — same shells,
+         same doc-served prices, zero catalogrule_product_price / tier_price SQL. -->
+    <preference for="Magento\Catalog\Pricing\Price\TierPrice"
+                type="ParkkTech\FastMagento\Pricing\Price\TierPrice" />
+    <preference for="Magento\CatalogRule\Pricing\Price\CatalogRulePrice"
+                type="ParkkTech\FastMagento\Pricing\Price\CatalogRulePrice" />
+    <preference for="Magento\Catalog\Pricing\Price\SpecialPrice"
+                type="ParkkTech\FastMagento\Pricing\Price\SpecialPrice" />
+
+    <!-- Configurable "from" price (price_range.minimum_price on a configurable in a GraphQL
+         listing) served from the OS child shells instead of a native child collection. -->
+    <type name="Magento\ConfigurableProduct\Pricing\Price\LowestPriceOptionsProvider">
+        <plugin name="fastmagento_lowest_price_options"
+                type="ParkkTech\FastMagento\Plugin\LowestPriceOptionsProviderPlugin"
+                sortOrder="10"/>
+    </type>
+
+    <!-- Configurable::getParentIdsByChild() from OpenSearch for graphql too. -->
+    <preference for="Magento\ConfigurableProduct\Model\ResourceModel\Product\Type\Configurable"
+                type="ParkkTech\FastMagento\Model\Configurable\ConfigurableProductType" />
+    <type name="ParkkTech\FastMagento\Model\Configurable\ConfigurableProductType">
+        <arguments>
+            <argument name="parentIdResolver" xsi:type="object">ParkkTech\FastMagento\Model\OpenSearch\ParentIdResolver\Proxy</argument>
+        </arguments>
+    </type>
+
+    <!-- Grouped::getParentIdsByChild() from OpenSearch for graphql too (area-guarded inside
+         the plugin; widened to accept AREA_GRAPHQL). -->
+    <type name="Magento\GroupedProduct\Model\Product\Type\Grouped">
+        <plugin name="fastmagento_grouped_parent_ids"
+                type="ParkkTech\FastMagento\Plugin\GroupedParentIdPlugin"
+                sortOrder="10"/>
+    </type>
+
+    <!-- Configurable child resolution (getUsedProducts/getProductByAttributes/isSalable)
+         from the OS-hydrated child registry, same as frontend. No internal area gate — it
+         only acts when the shell build already populated the registry, native otherwise. -->
+    <preference for="Magento\ConfigurableProduct\Model\Product\Type\Configurable"
+                type="ParkkTech\FastMagento\Model\Product\Type\Configurable" />
+
+    <!-- Disable core's used-products cache for graphql too — see etc/frontend/di.xml for why
+         a cache HIT would rebuild children as native products and reintroduce the price N+1. -->
+    <type name="Magento\ConfigurableProduct\Model\Product\Type\Configurable">
+        <plugin name="used_products_cache" disabled="true"/>
+    </type>
+
+    <!-- StockRegistry from OpenSearch for graphql too. -->
+    <preference for="Magento\CatalogInventory\Api\StockRegistryInterface"
+                type="ParkkTech\FastMagento\Model\OpenSearchStockRegistry" />
+
+    <!-- Keep a composite parent salable at the graphql stock gate when OpenSearch (its
+         children) says it is. No internal area gate (registry-driven), included for parity
+         with the frontend cart/PDP behaviour. -->
+    <type name="Magento\CatalogInventory\Api\StockRegistryInterface">
+        <plugin name="fastmagento_composite_parent_stock_status"
+                type="ParkkTech\FastMagento\Plugin\Inventory\CompositeParentStockStatusPlugin"
+                sortOrder="100"/>
+    </type>
+
+    <!-- Serve select/multiselect option labels from the OpenSearch dictionary for graphql
+         (custom/EAV attribute resolvers, layered-nav facets) — area-guard is inside the
+         Table plugin's caller path (Eav\Model\Entity\Attribute\Source\Table has no area gate
+         itself; safe to wire unconditionally, same as native admin/CLI keep their own path
+         since this plugin only fires when the dictionary has a matching entry). -->
+    <type name="Magento\Eav\Model\Entity\Attribute\Source\Table">
+        <plugin name="fastmagento_option_dictionary"
+                type="ParkkTech\FastMagento\Plugin\Eav\SourceOptionPlugin" sortOrder="10"/>
+    </type>
+
+    <!-- Category collection attribute values (name/url_key/is_active/include_in_menu/
+         is_anchor/all_children) from OpenSearch for the categories()/categoryList() resolvers.
+         Area-guard widened to accept AREA_GRAPHQL. -->
+    <type name="Magento\Catalog\Model\ResourceModel\Category\Collection">
+        <plugin name="fastmagento_category_attribute_load"
+                type="ParkkTech\FastMagento\Plugin\CategoryAttributeLoadPlugin"
+                sortOrder="10"/>
+    </type>
+
+    <!-- Collapse the per-category url_rewrite N+1 for graphql too. No internal area gate
+         (scoped to the single-category-by-id lookup shape regardless of caller). -->
+    <type name="Magento\UrlRewrite\Model\UrlFinderInterface">
+        <plugin name="fastmagento_category_url_finder"
+                type="ParkkTech\FastMagento\Plugin\CategoryUrlFinderPlugin"
+                sortOrder="10"/>
+    </type>
+
+    <!-- Use OpenSearch for individual product retrieval (ProductRepositoryInterface::
+         getById/get/getList) — covers GraphQL's SKU/URL-key single-product paths (e.g. route
+         resolution, wishlist, related items). Area-guard widened to accept AREA_GRAPHQL. -->
+    <type name="Magento\Catalog\Api\ProductRepositoryInterface">
+        <plugin name="shell_product_override" type="ParkkTech\FastMagento\Plugin\ProductRepositoryPlugin" sortOrder="10" disabled="false"/>
+    </type>
+
+    <!-- Route products(search:) id-resolution through FastMagento's own OS-direct
+         InstantSearch instead of core's search adapter, which loads every searchable
+         attribute's metadata from MySQL per request. Flag-gated
+         (fastmagento/graphql/os_serve_search), hard native fallback; see the plugin class for
+         the exact (deliberately narrow) Phase-1 scope. -->
+    <type name="Magento\Search\Api\SearchInterface">
+        <plugin name="fastmagento_graphql_search_os_hydration"
+                type="ParkkTech\FastMagento\Plugin\GraphQl\SearchOsHydrationPlugin"
+                sortOrder="10"/>
+    </type>
+
+</config>

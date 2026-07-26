@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ParkkTech\FastMagento\Plugin;
 
 use Magento\Catalog\Model\ResourceModel\Category\Collection;
+use Magento\Framework\App\Area;
 use Magento\Framework\App\State;
 use ParkkTech\FastMagento\Model\OpenSearch\CategoryDataProvider;
 
@@ -38,6 +39,9 @@ class CategoryAttributeLoadPlugin
         'all_children' => 'all_children',
     ];
 
+    /** OS-serve on the customer-facing storefront (frontend) and headless GraphQL areas. */
+    private const SERVABLE_AREAS = [Area::AREA_FRONTEND, Area::AREA_GRAPHQL];
+
     private ?\ReflectionProperty $selectAttributesProp = null;
     private ?\ReflectionProperty $itemsByIdProp = null;
 
@@ -55,7 +59,8 @@ class CategoryAttributeLoadPlugin
     public function around_loadAttributes(Collection $subject, callable $proceed, ...$args)
     {
         try {
-            if ($this->appState->getAreaCode() !== 'frontend' || !$this->categoryData->isAvailable()) {
+            if (!in_array($this->appState->getAreaCode(), self::SERVABLE_AREAS, true)
+                || !$this->categoryData->isAvailable()) {
                 return $proceed(...$args);
             }
 

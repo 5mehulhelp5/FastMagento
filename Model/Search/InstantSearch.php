@@ -45,6 +45,12 @@ class InstantSearch
      * @param int $pageSize
      * @param array<string, string[]> $filters attributeCode => selected values (native field terms)
      * @param bool $withFacets aggregate category + price + configured attribute facets
+     * @param array<int, array<string, array<string, string>>>|null $sortOverride explicit OS sort
+     *        clauses (e.g. [['price_0_1' => ['order' => 'asc']]]) used INSTEAD of buildSort()'s
+     *        relevance ranking. Null (default) keeps today's behaviour unchanged, so callers that
+     *        never pass it - the storefront Suggest/Instant controllers - are unaffected. A
+     *        deterministic `_id` tiebreaker is appended automatically so paging stays stable
+     *        regardless of what the caller supplies.
      * @return array{query:string,total:int,page:int,page_size:int,products:array,facets:array}
      */
     public function search(
@@ -52,7 +58,8 @@ class InstantSearch
         int $page = 1,
         int $pageSize = 8,
         array $filters = [],
-        bool $withFacets = false
+        bool $withFacets = false,
+        ?array $sortOverride = null
     ): array {
         $query = trim($query);
         $page = max(1, $page);
@@ -80,7 +87,15 @@ class InstantSearch
                 '_source' => ['name', 'sku'],
                 'track_total_hits' => true,
             ];
-            $sort = $this->buildSort();
+            if ($sortOverride !== null) {
+                // Explicit sort (e.g. GraphQL sort:{price:ASC}); always append a stable tiebreaker
+                // so paging is deterministic even when the override omits one. `entity_id` is not
+                // a mapped field in this index (the doc id lives in `_id`), so tiebreak on `_id`
+                // itself - always sortable, always unique.
+                $sort = array_merge($sortOverride, [['_id' => ['order' => 'asc']]]);
+            } else {
+                $sort = $this->buildSort();
+            }
             if ($sort) {
                 $body['sort'] = $sort;
             }

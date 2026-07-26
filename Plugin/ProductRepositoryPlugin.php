@@ -2,6 +2,7 @@
 
 namespace ParkkTech\FastMagento\Plugin;
 
+use Magento\Framework\App\Area;
 use Magento\Framework\App\State;
 use ParkkTech\FastMagento\Helper\WriteLog;
 use Magento\Framework\Api\SearchResultsInterface;
@@ -17,6 +18,9 @@ use ParkkTech\FastMagento\Model\Indexer\ProductIndexer;
  */
 class ProductRepositoryPlugin
 {
+    /** OS-serve on the customer-facing storefront (frontend) and headless GraphQL areas. */
+    private const SERVABLE_AREAS = [Area::AREA_FRONTEND, Area::AREA_GRAPHQL];
+
     /**
      * @param State $state
      * @param WriteLog $writeLog
@@ -45,7 +49,7 @@ class ProductRepositoryPlugin
         $storeId = null,
         $forceReload = false
     ) {
-        if ($this->state->getAreaCode() != 'frontend') {
+        if (!in_array($this->state->getAreaCode(), self::SERVABLE_AREAS, true)) {
             return $proceed($productId, $editMode, $storeId, $forceReload);
         }
 
@@ -87,7 +91,7 @@ class ProductRepositoryPlugin
                                    $storeId = null,
                                    $forceReload = false
     ) {
-        if ($this->state->getAreaCode() != 'frontend') {
+        if (!in_array($this->state->getAreaCode(), self::SERVABLE_AREAS, true)) {
             return $proceed($sku, $editMode, $storeId, $forceReload);
         }
 
@@ -111,7 +115,7 @@ class ProductRepositoryPlugin
         callable $proceed,
         \Magento\Framework\Api\SearchCriteriaInterface $searchCriteria
     ) {
-        if ($this->state->getAreaCode() != 'frontend') {
+        if (!in_array($this->state->getAreaCode(), self::SERVABLE_AREAS, true)) {
             return $proceed($searchCriteria);
         }
 

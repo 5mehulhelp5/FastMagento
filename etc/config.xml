@@ -6,11 +6,15 @@
             <indexing>
                 <opensearch_index_prefix>products</opensearch_index_prefix>
                 <opensearch_category_index_prefix>categories</opensearch_category_index_prefix>
-                <!-- Instant product update. Default OFF (opt-in): on a product save, immediately
-                     reproject that product (+ composite parents) into OpenSearch and purge its
-                     full-page cache, bypassing the scheduled indexer + FPC lag so staff see edits
-                     live. Adds a reprojection + cache purge to every product save. -->
-                <instant_product_update>0</instant_product_update>
+                <!-- Instant product update. Default ON: a MANUAL SINGLE-PRODUCT ADMIN EDIT
+                     (catalog_product_save) immediately reprojects that product (+ composite
+                     parents) into OpenSearch and purges its full-page cache, bypassing the
+                     scheduled indexer + FPC lag so staff see edits live. Scope is enforced in
+                     Observer\InstantUpdateOnSave: API (REST/GraphQL) writes, admin bulk actions
+                     (mass status/delete, Update Attributes), imports and cron all fall through to
+                     the normal scheduled mview indexer, so a mass save never fans out into N
+                     reprojections. -->
+                <instant_product_update>1</instant_product_update>
                 <!-- When instant update purges the cache, also purge the product's category pages
                      (not just its own page). Default ON. -->
                 <instant_purge_categories>1</instant_purge_categories>
@@ -19,7 +23,7 @@
                 <!-- Attribute facets shown on the instant search results page (comma-separated
                      attribute codes). SELECT-type filterable attributes only: their option
                      labels resolve cleanly from OpenSearch. Multi-select attributes are not
-                     included here — their id→label pairing can't be resolved from the native
+                     included here — their id-to-label pairing can't be resolved from the native
                      index alone (see InstantSearch::bucketLabel) and needs an indexed option
                      dictionary (follow-up). Admin-overridable under FastMagento > Search.
                      Empty by default: shipping catalogue-specific codes here would silently break
@@ -140,8 +144,8 @@ xxxl, 3xl, triple xl</synonyms>
                 <optimistic_stock>0</optimistic_stock>
                 <!-- Advanced override (default 0). Implied ON by the master above. Fast stock
                      sync — when an order/refund/inventory save mutates stock, patch just the stock
-                     fields of the affected OpenSearch docs (mget → patch is_in_stock/qty +
-                     composite child stock → bulk re-index) instead of a full EAV reprojection.
+                     fields of the affected OpenSearch docs (mget patch is_in_stock/qty +
+                     composite child stock bulk re-index) instead of a full EAV reprojection.
                      Falls back to a full reproject for any doc missing/partial in the index.
                      Background (post-response) work. Set 1 to force on while the master is off. -->
                 <fast_stock_sync>0</fast_stock_sync>
@@ -155,6 +159,18 @@ xxxl, 3xl, triple xl</synonyms>
             <credit>
                 <show>1</show>
             </credit>
+            <!-- GraphQL Serving. Default ON. os_serve_products hydrates storefront
+                 products()/category-products() GraphQL reads from OpenSearch (same result set as
+                 native, just faster - see Plugin\GraphQl\ProductCollectionOsHydrationPlugin +
+                 etc/graphql/di.xml). os_serve_search routes GraphQL fulltext search through
+                 FastMagento's OpenSearch relevance engine, consistent with the storefront and
+                 tuned via the Instant Search & Relevance settings. Hard native fallback for any
+                 missing/partial doc, unmapped sort/filter/aggregation, or error, so it never
+                 breaks a query. -->
+            <graphql>
+                <os_serve_products>1</os_serve_products>
+                <os_serve_search>1</os_serve_search>
+            </graphql>
         </fastmagento>
     </default>
 </config>
