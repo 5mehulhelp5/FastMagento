@@ -113,10 +113,20 @@ class InstantSearch
                 $body['aggs'] = $this->buildAggregations($includePriceFacet);
             }
 
-            $response = $client->getOpenSearchClient()->search([
-                'index' => $this->getSearchIndex($storeId),
-                'body' => $body,
-            ]);
+            $index = $this->getSearchIndex($storeId);
+            try {
+                $response = $client->getOpenSearchClient()->search(['index' => $index, 'body' => $body]);
+            } catch (\Throwable $primaryError) {
+                // The rich relevance query can exceed OpenSearch's boolean max_clause_count on a
+                // long or synonym-heavy input (too_many_nested_clauses). Retry once with a compact
+                // best-fields query that is always within the limit, so a valid search returns its
+                // best matches instead of failing to the empty set.
+                $this->writeLog->writeErrorLog(
+                    '[FastMagento] instant search primary query failed, retrying simplified: ' . $primaryError->getMessage()
+                );
+                $body['query'] = $this->buildFallbackQuery($query, $filters);
+                $response = $client->getOpenSearchClient()->search(['index' => $index, 'body' => $body]);
+            }
 
             $hits = $response['hits']['hits'] ?? [];
             $ids = array_map(static fn ($h) => (int) $h['_id'], $hits);
@@ -246,14 +256,7 @@ class InstantSearch
             ]];
         }
 
-        $filterClauses = [];
-        foreach ($filters as $field => $values) {
-            $values = array_values(array_filter((array) $values, static fn ($v) => $v !== '' && $v !== null));
-            if (!$values) {
-                continue;
-            }
-            $filterClauses[] = ['terms' => [$this->filterField($field) => $values]];
-        }
+        $filterClauses = $this->buildFilterClauses($filters);
 
         $bool = ['should' => $should, 'minimum_should_match' => 1];
         if ($filterClauses) {
@@ -275,6 +278,63 @@ class InstantSearch
                 ],
             ];
         }
+        return ['bool' => $bool];
+    }
+
+    /**
+     * Turn the {field: [values]} filter set into OpenSearch `terms` filter clauses.
+     *
+     * @param array<string, string[]> $filters
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildFilterClauses(array $filters): array
+    {
+        $filterClauses = [];
+        foreach ($filters as $field => $values) {
+            $values = array_values(array_filter((array) $values, static fn ($v) => $v !== '' && $v !== null));
+            if (!$values) {
+                continue;
+            }
+            $filterClauses[] = ['terms' => [$this->filterField($field) => $values]];
+        }
+        return $filterClauses;
+    }
+
+    /**
+     * A deliberately tiny relevance query used only when the full {@see buildQuery()} query is
+     * rejected by OpenSearch for exceeding its boolean max_clause_count (the rich query multiplies
+     * candidates x scoring-clauses x fields x terms, plus fuzzy/prefix term expansion, which a long
+     * or synonym-heavy input can push past the 1024 default). One best-fields multi_match over the
+     * cleaned query - no synonym candidates, no fuzzy/prefix/phrase/cross-fields - is a handful of
+     * clauses that can never hit the limit, so the search still returns its best matches instead of
+     * the empty set the error would otherwise produce. Filters are preserved.
+     *
+     * @param array<string, string[]> $filters
+     */
+    private function buildFallbackQuery(string $query, array $filters): array
+    {
+        $clean = $this->expandQuery($query)['clean'];
+        if ($clean === '') {
+            $clean = trim((string) preg_replace('/\s+/', ' ', mb_strtolower($query)));
+        }
+
+        $bool = [
+            'should' => [[
+                'multi_match' => [
+                    'query' => $clean,
+                    'type' => 'best_fields',
+                    'fields' => $this->relevanceConfig->getBoostedFields(),
+                    'tie_breaker' => 0.3,
+                ],
+            ]],
+            'minimum_should_match' => 1,
+        ];
+
+        $filterClauses = $this->buildFilterClauses($filters);
+        if ($filterClauses) {
+            $bool['filter'] = $filterClauses;
+        }
+
         return ['bool' => $bool];
     }
 
@@ -370,7 +430,9 @@ class InstantSearch
                 }
             }
         }
-        $variants = array_slice($variants, 0, 8);
+        // Cap synonym variants: each becomes a full set of scoring clauses in buildQuery(), so this
+        // directly bounds the candidate multiplier on the OpenSearch boolean clause count.
+        $variants = array_slice($variants, 0, 5);
 
         return ['clean' => $clean, 'variants' => $variants];
     }
