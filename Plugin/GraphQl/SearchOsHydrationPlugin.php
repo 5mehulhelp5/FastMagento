@@ -19,6 +19,8 @@ use Magento\Search\Api\SearchInterface;
 use Magento\Store\Model\ScopeInterface;
 use Magento\Store\Model\StoreManagerInterface;
 use ParkkTech\FastMagento\Helper\WriteLog;
+use ParkkTech\FastMagento\Model\GraphQl\FacetHolder;
+use ParkkTech\FastMagento\Model\GraphQl\FastMagentoAggregation;
 use ParkkTech\FastMagento\Model\Search\InstantSearch;
 
 /**
@@ -33,12 +35,17 @@ use ParkkTech\FastMagento\Model\Search\InstantSearch;
  * by {@see ProductCollectionOsHydrationPlugin} on `Collection::load()`, downstream of this
  * plugin, in `ProductSearch::getList()`.
  *
+ * Both the plain `graphql_product_search` request and `graphql_product_search_with_aggregation`
+ * (the query selects `aggregations`/`filters`) are served. For the latter, InstantSearch is
+ * called with facets on and the formatted facets are carried on the SearchResult as a
+ * {@see FastMagentoAggregation}; {@see \ParkkTech\FastMagento\Plugin\GraphQl\AggregationsOsHydrationPlugin}
+ * detects that marker and builds the GraphQL aggregation array directly from it, bypassing
+ * core's layerBuilder (which fatals on any bucket whose attribute isn't a filterable EAV
+ * attribute - exactly what native GraphQL aggregations crash on for this catalogue). If
+ * InstantSearch produces no facets at all, the whole query falls back to native rather than
+ * return an aggregation-less result for a query that asked for one.
+ *
  * SCOPE (Phase 1, deliberately conservative - correct over fast):
- *  - Only the plain `graphql_product_search` request name is fast-pathed. The
- *    `graphql_product_search_with_aggregation` variant (the query selects `aggregations`/
- *    `filters`) falls straight through to native - mapping InstantSearch's facet buckets to
- *    `AggregationInterface` correctly is a separate piece of work; a wrong facet is worse than
- *    a slower one.
  *  - Sort: the DEFAULT relevance sort (`[relevance DESC, entity_id tiebreaker]`, the exact shape
  *    `SearchCriteriaBuilder::build()` produces when no explicit `sort:` arg is given), an explicit
  *    `sort:{price:ASC|DESC}`, or `sort:{name:ASC|DESC}` are fast-pathed (mapped to InstantSearch's
@@ -58,12 +65,16 @@ class SearchOsHydrationPlugin
 {
     private const XML_PATH_OS_SERVE = 'fastmagento/graphql/os_serve_search';
 
-    /** The `_with_aggregation` request name is out of Phase-1 scope; see class docblock. */
-    private const SUPPORTED_REQUEST_NAMES = ['graphql_product_search'];
+    private const REQUEST_NAME_SEARCH = 'graphql_product_search';
+    private const REQUEST_NAME_WITH_AGGREGATION = 'graphql_product_search_with_aggregation';
+    private const SUPPORTED_REQUEST_NAMES = [self::REQUEST_NAME_SEARCH, self::REQUEST_NAME_WITH_AGGREGATION];
 
     private const FIELD_SEARCH_TERM = 'search_term';
     private const FIELD_VISIBILITY = 'visibility';
     private const FIELD_CATEGORY_ID = 'category_id';
+    /** Added by SearchCriteriaBuilder::preparePriceAggregation() for aggregation requests; a
+     *  hint for native's price-range-bucketing algorithm, not a product filter - safe to ignore. */
+    private const FIELD_PRICE_DYNAMIC_ALGORITHM = 'price_dynamic_algorithm';
 
     public function __construct(
         private readonly AppState $appState,
@@ -73,7 +84,8 @@ class SearchOsHydrationPlugin
         private readonly DocumentFactory $documentFactory,
         private readonly WriteLog $writeLog,
         private readonly CustomerSession $customerSession,
-        private readonly StoreManagerInterface $storeManager
+        private readonly StoreManagerInterface $storeManager,
+        private readonly FacetHolder $facetHolder
     ) {
     }
 
@@ -119,14 +131,23 @@ class SearchOsHydrationPlugin
                 return $proceed($searchCriteria);
             }
 
+            $withAggregation = $searchCriteria->getRequestName() === self::REQUEST_NAME_WITH_AGGREGATION;
+
             $result = $this->instantSearch->search(
                 $term,
                 $currentPage,
                 $pageSize,
                 $filters,
-                false,
+                $withAggregation,
                 $sortMap['override']
             );
+
+            if ($withAggregation && empty($result['facets'])) {
+                // The query asked for aggregations but InstantSearch produced none (e.g. no
+                // facet attributes configured) - native builds a correct, if slower, aggregation
+                // from the raw engine response instead of us returning an empty one.
+                return $proceed($searchCriteria);
+            }
 
             $items = [];
             foreach ($result['products'] as $product) {
@@ -142,11 +163,18 @@ class SearchOsHydrationPlugin
             $searchResult = $this->searchResultFactory->create();
             $searchResult->setItems($items);
             $searchResult->setTotalCount((int) $result['total']);
-            // No facets computed in this phase (see class docblock); an empty aggregation is
-            // safe because a plain `graphql_product_search` request never selects
-            // aggregations/filters (SearchCriteriaBuilder::build() would have used the
-            // `_with_aggregation` request name instead, which we don't fast-path).
-            $searchResult->setAggregations(new Aggregation([]));
+            if ($withAggregation) {
+                // The object set here does not reliably survive to the Aggregations resolver
+                // (see FacetHolder's docblock), so stash the facets in the request-scoped holder
+                // too - that is what AggregationsOsHydrationPlugin actually reads. Still setting
+                // FastMagentoAggregation here as well: it is the correct/intended shape for
+                // anything that reads getSearchAggregation() directly off THIS return value
+                // (e.g. Query\Search::getResult()'s own 'searchAggregation' key).
+                $this->facetHolder->setFacets($result['facets']);
+                $searchResult->setAggregations(new FastMagentoAggregation($result['facets']));
+            } else {
+                $searchResult->setAggregations(new Aggregation([]));
+            }
             $searchResult->setSearchCriteria($searchCriteria);
 
             return $searchResult;
@@ -284,10 +312,14 @@ class SearchOsHydrationPlugin
         foreach ($searchCriteria->getFilterGroups() as $group) {
             foreach ($group->getFilters() as $filter) {
                 $field = (string) $filter->getField();
-                if ($field === self::FIELD_SEARCH_TERM || $field === self::FIELD_VISIBILITY) {
+                if ($field === self::FIELD_SEARCH_TERM
+                    || $field === self::FIELD_VISIBILITY
+                    || $field === self::FIELD_PRICE_DYNAMIC_ALGORITHM
+                ) {
                     // search_term is the query itself; visibility is already implicit in the
                     // native fulltext index InstantSearch queries (it only ever indexes
-                    // search-visible, enabled products for the store).
+                    // search-visible, enabled products for the store); price_dynamic_algorithm
+                    // is a native-only bucketing hint (see the constant's docblock).
                     continue;
                 }
                 if ($field !== self::FIELD_CATEGORY_ID) {

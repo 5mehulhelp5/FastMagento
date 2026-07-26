@@ -123,4 +123,14 @@
                 sortOrder="10"/>
     </type>
 
+    <!-- Build GraphQL layered-nav aggregations directly from FastMagento's OS-native facets when
+         SearchOsHydrationPlugin served this search, bypassing core's layerBuilder (which fatals
+         on any bucket whose attribute isn't a filterable EAV attribute). Native fallback for
+         every other case. -->
+    <type name="Magento\CatalogGraphQl\Model\Resolver\Aggregations">
+        <plugin name="fastmagento_graphql_aggregations_os_hydration"
+                type="ParkkTech\FastMagento\Plugin\GraphQl\AggregationsOsHydrationPlugin"
+                sortOrder="10"/>
+    </type>
+
 </config>
