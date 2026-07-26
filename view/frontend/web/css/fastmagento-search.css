@@ -85,7 +85,7 @@
 
 .fm-instant-results .fm-grid.product-items {
     display: grid !important;
-    grid-template-columns: repeat(var(--fm-cols, 4), 1fr) !important;
+    grid-template-columns: repeat(var(--fm-cols, 3), 1fr) !important; /* default 3 to match category grid */
     gap: 22px 20px;
     margin: 0;
     padding: 0;
