@@ -294,6 +294,10 @@
             facetHost = null,
             facetProtos = null,
             facetOpen = {},
+            // The active-filter card starts expanded: it only exists once something is applied,
+            // and a shopper who just picked an option should see what they picked. After that it
+            // is theirs — collapse it and it stays collapsed through every later update.
+            stateOpen = true,
             state = {
                 q: config.initialQuery || param('q') || '',
                 page: parseInt(param('p'), 10) || 1,
@@ -468,6 +472,72 @@
             target.insertBefore(document.createTextNode(label), target.firstChild);
         }
 
+        /*
+           "Currently filtering by" comes from the server already rendered through the theme's own
+           layer/state.phtml (see Controller\Search\Instant::renderState), so the chips, remove
+           buttons and "Clear All" are the theme's, not ours. It goes above the filter groups,
+           which is where the theme's own layered-nav template puts getChildHtml('state').
+        */
+        function hydrateThemeState(html) {
+            var holder = facetHost.querySelector('[data-fm-state]'),
+                previous = holder ? holder.querySelector('details') : null,
+                first,
+                details;
+
+            // Re-read the shopper's choice before the markup that carries it is replaced.
+            if (previous) {
+                stateOpen = previous.open;
+            }
+
+            if (!html) {
+                if (holder) {
+                    holder.parentNode.removeChild(holder);
+                }
+                return;
+            }
+            if (!holder) {
+                holder = document.createElement('div');
+                holder.setAttribute('data-fm-state', '');
+                first = facetHost.querySelector('[data-fm-facet-group], .filter-option, .filter-options-item');
+                facetHost.insertBefore(holder, first || facetHost.firstChild);
+            }
+
+            // The server re-renders this card on every response, so unlike the filter groups there
+            // is no node to keep — the open state has to be carried across by hand, or the card
+            // snaps shut on each keystroke and each filter change.
+            holder.innerHTML = html;
+            details = holder.querySelector('details');
+            if (details) {
+                details.open = stateOpen;
+            }
+        }
+
+        // Every link the state block renders — each remove button and "Clear All" — is a real
+        // results URL for the set it leads to. Rather than teach the JS each one's meaning, adopt
+        // that URL's query as the new state: one handler covers removing a single option, removing
+        // the last one, and clearing everything, and the links still work with JS off.
+        function onStateClick(e) {
+            var link = e.target.closest ? e.target.closest('[data-fm-state] a') : null,
+                params,
+                next;
+            if (!link) {
+                return;
+            }
+            e.preventDefault();
+            params = new URLSearchParams((link.getAttribute('href') || '').split('?')[1] || '');
+            next = {};
+            params.forEach(function (value, key) {
+                var match = key.match(/^filter\[(.+)\]$/);
+                if (match) {
+                    next[match[1]] = value.split(',').filter(Boolean);
+                }
+            });
+            state.q = params.get('q') || '';
+            state.filters = next;
+            state.page = 1;
+            load();
+        }
+
         // <details> is what the Tailwind-based themes use; `aria-expanded` covers a theme that
         // drives its groups from a button instead.
         function isGroupOpen(group) {
@@ -619,6 +689,7 @@
                 facets = renderFacets(data.facets);
 
             if (facetHost && facetProtos) {
+                hydrateThemeState(data.stateHtml);
                 hydrateThemeFacets(data.facets);
                 root.innerHTML = header + body;
                 return;
@@ -682,6 +753,7 @@
             // Grab the theme's markup BEFORE the first refill replaces it.
             facetProtos = captureProtos(facetHost);
             facetHost.addEventListener('change', onFacetChange);
+            facetHost.addEventListener('click', onStateClick);
             facetHost.addEventListener('click', onFacetClick);
             if (!facetProtos) {
                 // Self-contained rail: it needs our stylesheet, the theme's markup does not.
