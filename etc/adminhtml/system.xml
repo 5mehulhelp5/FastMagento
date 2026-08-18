@@ -55,6 +55,16 @@
                 </field>
             </group>
 
+            <group id="plp" translate="label" sortOrder="15" showInDefault="1" showInWebsite="1" showInStore="1">
+                <label>Product Listing (PLP)</label>
+                <comment><![CDATA[Category and search <strong>listing pages</strong>. With a search engine configured, Magento already gets the product ids, ordering, pagination and layered-navigation counts from OpenSearch — what still costs hundreds of queries is turning those ids into products through EAV. Turning this on replaces that last step only; blocks, templates, toolbar and layered navigation are untouched.]]></comment>
+                <field id="serve_listing" translate="label comment" type="select" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Serve Listing From OpenSearch</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment><![CDATA[<strong>Default Yes.</strong> Failsafe by design: a listing is served from the index only when <em>every</em> product on the page is present there — any miss, or an OpenSearch error, falls that page back to the normal EAV load, so you never get a partial listing. Set to <strong>No</strong> to force the native path. Requires <em>fastmagento_product</em> to be indexed.]]></comment>
+                </field>
+            </group>
+
             <!-- Instant Search + Relevance -->
             <group id="search" translate="label" sortOrder="20" showInDefault="1" showInWebsite="1" showInStore="1">
                 <label>Instant Search &amp; Relevance</label>

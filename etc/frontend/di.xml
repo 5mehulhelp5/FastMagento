@@ -250,4 +250,29 @@
                 type="ParkkTech\FastMagento\Plugin\Eav\SourceOptionPlugin" sortOrder="10"/>
     </type>
 
+    <!--
+        Product listing served from OpenSearch. See Model\Plp\ListingHydrator for why this is a
+        hydration-only change: the id list, ordering, pagination and layered-nav counts already
+        come from OpenSearch on a 2.4 install with a search engine configured.
+    -->
+    <preference for="Magento\CatalogSearch\Model\ResourceModel\Fulltext\Collection"
+                type="ParkkTech\FastMagento\Model\ResourceModel\Fulltext\Collection"/>
+
+    <!--
+        The preference above is NOT enough on its own. Magento's search engine modules build the
+        listing collection through VIRTUAL TYPES (`elasticsearchCategoryCollection`,
+        `elasticsearchFulltextSearchCollection`, ...) whose `type` names the core class directly.
+        Virtual types are resolved by name and never go through preference resolution, so a
+        preference on the core class is silently bypassed for exactly the pages we care about.
+        Re-pointing each virtual type's `type` here keeps every argument those modules configured
+        (search request name, filter-strategy checker, resolver factories) and only swaps the base
+        class. Both engines are covered because Magento_OpenSearch reuses the elasticsearch* names.
+    -->
+    <virtualType name="elasticsearchCategoryCollection"
+                 type="ParkkTech\FastMagento\Model\ResourceModel\Fulltext\Collection"/>
+    <virtualType name="elasticsearchFulltextSearchCollection"
+                 type="ParkkTech\FastMagento\Model\ResourceModel\Fulltext\Collection"/>
+    <virtualType name="Magento\CatalogSearch\Model\ResourceModel\Fulltext\SearchCollection"
+                 type="ParkkTech\FastMagento\Model\ResourceModel\Fulltext\Collection"/>
+
 </config>

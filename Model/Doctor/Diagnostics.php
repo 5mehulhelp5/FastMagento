@@ -34,6 +34,7 @@ class Diagnostics
     private const G_FACETS = 'Facets';
     private const G_THEME = 'Theme';
     private const G_CHECKOUT = 'Checkout';
+    private const G_PLP = 'Listing';
     private const G_PHP = 'PHP';
 
     public function __construct(
@@ -49,7 +50,8 @@ class Diagnostics
         private readonly \Magento\Framework\Module\Manager $moduleManager,
         private readonly \Magento\Framework\View\DesignInterface $design,
         private readonly \Magento\Store\Model\StoreManagerInterface $storeManager,
-        private readonly \Magento\Framework\View\Design\Theme\ThemeProviderInterface $themeProvider
+        private readonly \Magento\Framework\View\Design\Theme\ThemeProviderInterface $themeProvider,
+        private readonly \Magento\Framework\ObjectManager\ConfigLoaderInterface $configLoader
     ) {
     }
 
@@ -106,6 +108,7 @@ class Diagnostics
         $checks = array_merge($checks, $this->checkIndexers());
         $checks = array_merge($checks, $this->checkCron());
         $checks = array_merge($checks, $this->checkFacets($client));
+        $checks = array_merge($checks, $this->checkPlp());
         $checks = array_merge($checks, $this->checkTheme());
         $checks = array_merge($checks, $this->checkCheckout());
         $checks = array_merge($checks, $this->checkPhp());
@@ -462,6 +465,51 @@ class Diagnostics
                 );
         } catch (\Throwable $e) {
             $out[] = Check::fail(self::G_FACETS, 'Option dictionary', $e->getMessage(), 'Run: bin/magento indexer:reindex fastmagento_attribute_option');
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return Check[]
+     */
+    private function checkPlp(): array
+    {
+        $on = $this->scopeConfig->isSetFlag(\ParkkTech\FastMagento\Model\Plp\ListingHydrator::XML_PATH_ENABLED);
+        if (!$on) {
+            return [Check::warn(
+                self::G_PLP,
+                'Category listing source',
+                'native EAV — OpenSearch listing serving is off',
+                'Set FastMagento > Product Listing (PLP) > Serve Listing From OpenSearch to Yes, '
+                . 'or run: bin/magento config:set fastmagento/plp/serve_listing 1'
+            )];
+        }
+
+        $out = [Check::ok(self::G_PLP, 'Category listing source', 'OpenSearch (falls back to EAV per page on any index miss)')];
+
+        // The listing swap only takes effect if the search engine's collection virtual types were
+        // successfully re-pointed; a third-party module redefining them would silently win.
+        $expected = \ParkkTech\FastMagento\Model\ResourceModel\Fulltext\Collection::class;
+        try {
+            // Must read the FRONTEND area config: the override is frontend-scoped on purpose, so
+            // the global/CLI config legitimately still shows the core class and reading it here
+            // would report a failure on a perfectly healthy install.
+            $frontendConfig = $this->configLoader->load(\Magento\Framework\App\Area::AREA_FRONTEND);
+            $actual = $frontendConfig['virtualTypes']['elasticsearchCategoryCollection'] ?? null;
+            if ($actual !== null && ltrim((string) $actual, '\\') !== ltrim($expected, '\\')) {
+                $out[] = Check::fail(
+                    self::G_PLP,
+                    'Listing collection class',
+                    sprintf('elasticsearchCategoryCollection resolves to %s', $actual),
+                    'Another module re-points this virtual type, so listings still load through EAV. '
+                    . 'Whichever module loads last wins — adjust module sequence or merge the override.'
+                );
+            } else {
+                $out[] = Check::ok(self::G_PLP, 'Listing collection class', 'FastMagento collection is wired in');
+            }
+        } catch (\Throwable $e) {
+            $out[] = Check::skip(self::G_PLP, 'Listing collection class', $e->getMessage());
         }
 
         return $out;

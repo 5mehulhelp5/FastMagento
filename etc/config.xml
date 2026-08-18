@@ -26,6 +26,19 @@
                      a reindex reports "Limit of total fields ... exceeded", then reindex. -->
                 <os_total_fields_limit>5000</os_total_fields_limit>
             </indexing>
+            <plp>
+                <!--
+                    Serve the category/search product LISTING from OpenSearch instead of EAV.
+                    Default ON: serving the catalogue from the index is what this module is for,
+                    and this is the page type where EAV hydration costs the most.
+                    Failsafe by construction — a page is served from the index only when EVERY
+                    product on it is present there; any miss, or any OpenSearch error, falls the
+                    whole page back to the native EAV load rather than rendering partial data.
+                    Set to 0 to force the native path; `bin/magento fastmagento:doctor` reports
+                    which path is live.
+                -->
+                <serve_listing>1</serve_listing>
+            </plp>
             <search>
                 <!-- Attribute facets on the instant search results page (comma-separated codes).
                      EMPTY NOW MEANS AUTO-DETECT, not "none": RelevanceConfig::getFacetAttributes()
