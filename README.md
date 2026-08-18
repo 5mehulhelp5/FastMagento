@@ -55,11 +55,27 @@ bin/magento module:enable ParkkTech_FastMagento
 bin/magento setup:upgrade
 bin/magento setup:di:compile        # production mode only
 bin/magento cache:flush
-bin/magento indexer:reindex fastmagento_product fastmagento_category
+
+# All THREE indexers. The attribute-option dictionary is what facet labels are resolved from —
+# skip it and every attribute facet silently disappears. setup:upgrade marks all three invalid
+# for you, so cron will also build them on its own.
+bin/magento indexer:reindex fastmagento_product fastmagento_category fastmagento_attribute_option
+
+# Confirm it is actually serving (cluster, indices, indexers, cron, facets, theme, checkout)
+bin/magento fastmagento:doctor
 ```
 
-**Requirements:** Magento 2.4.6+, PHP 8.1+, and a configured OpenSearch/Elasticsearch engine.
+**Requirements:** Magento 2.4.6+, PHP 8.1–8.5, and a configured OpenSearch/Elasticsearch engine.
 Full options (VCS install before Packagist, manual install, per-indexer notes) → [**Installation**](#installation).
+
+> 🩺 **Something not working?** Run **`bin/magento fastmagento:doctor`**. Every FastMagento failure
+> mode is silent — the storefront keeps returning HTTP 200 while a feature is quietly off — so the
+> doctor checks each condition explicitly and prints the exact command that fixes it. Add `--json`
+> for CI, `--strict` to fail on warnings too.
+
+> 🎨 **Themes.** The storefront JavaScript is dependency-free — no jQuery, no RequireJS, no Alpine —
+> so autocomplete and instant search run identically on **default Magento (Luma/Blank)**,
+> **Swissup Breeze** and **Hyvä**. None of them is required, and none is special-cased.
 
 ## Why it exists (the honest origin story)
 
@@ -116,6 +132,21 @@ muted <code>&lt;video&gt;</code> (MP4/WebM) — swap the <code>&lt;img&gt;</code
 > the data cost underneath it. 🤝
 
 ## Problems it solves (problem → solution)
+
+> ### ℹ️ Scope today: category listings (PLPs) are still served from MySQL
+> Worth stating plainly, because it is the single most common "is it broken?" question.
+> FastMagento serves **PDPs, search, autocomplete, the category tree/menu and the cart** from
+> OpenSearch. It does **not yet** serve the **product listing on a category page** — that path
+> ships disabled in `view/frontend/layout/catalog_category_view.xml` while the block/template
+> contract is finished (Phase 2 / 2L in
+> [docs/OPENSEARCH-SERVING-LAYER-PLAN.md](docs/OPENSEARCH-SERVING-LAYER-PLAN.md)).
+>
+> So a category page still runs Magento's normal EAV listing queries — on a page of configurables
+> that is roughly *7 queries per product* (tier price, catalog rule, media gallery, stock, super
+> link/attribute). Measured on a stock 2.4.7-p10 + Luma-sample-data install: **~360 SQL** on a
+> 12-configurable category page cold, of which ~158 touch `catalog_product_entity`. That number is
+> the same with the module enabled or disabled, on every Magento version — it is not a regression
+> and not a theme problem. PDPs on the same install: **5–13** product queries. Autocomplete: **0**.
 
 Every one of these is a real Magento 2 pain on a large catalog — and a standalone reason to install:
 

@@ -77,11 +77,17 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
         private ProductFactory $productFactory,
         private WriteLog $writeLog,
         private ProductRepositoryInterface $productRepository,
-        private ?\Magento\Framework\Stdlib\DateTime\TimezoneInterface $localeDate = null
+        private ?\Magento\Framework\Stdlib\DateTime\TimezoneInterface $localeDate = null,
+        private ?\ParkkTech\FastMagento\Model\OpenSearch\IndexSettings $indexSettings = null
     ) {
         $this->localeDate = $localeDate
             ?? \Magento\Framework\App\ObjectManager::getInstance()
                 ->get(\Magento\Framework\Stdlib\DateTime\TimezoneInterface::class);
+        // Optional-with-fallback so an existing install's compiled DI keeps working across the
+        // upgrade that introduces it (same pattern as $localeDate above).
+        $this->indexSettings = $indexSettings
+            ?? \Magento\Framework\App\ObjectManager::getInstance()
+                ->get(\ParkkTech\FastMagento\Model\OpenSearch\IndexSettings::class);
         $this->clientResolver = $clientResolver;
         $this->engineResolver = $engineResolver;
         $this->productCollectionFactory = $productCollectionFactory;
@@ -850,8 +856,18 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
             try {
                 $response = $client->getOpenSearchClient()->bulk(['body' => $lines . "\n"]);
                 if (isset($response['errors']) && $response['errors']) {
-                    $this->logger->error('OpenSearch Bulk Errors: ' . json_encode($response, JSON_PRETTY_PRINT));
+                    // A per-item rejection (mapping limit, type conflict, rejected execution) does
+                    // NOT fail the bulk request as a whole — OpenSearch returns 200 with errors:true
+                    // and the bad items simply missing. Logging and continuing here is what made a
+                    // partially-built index report as a successful reindex, so throw instead: the
+                    // indexer is then left invalid and the admin shows a reindex-required notice.
+                    throw new LocalizedException(
+                        __('OpenSearch rejected %1 document(s): %2', ...$this->summarizeBulkErrors($response))
+                    );
                 }
+            } catch (LocalizedException $e) {
+                $this->logger->error('[FastMagento] ' . $e->getMessage());
+                throw $e;
             } catch (\Exception $e) {
                 $this->logger->error('Bulk NDJSON error: ' . $e->getMessage());
                 throw new LocalizedException(__('Bulk NDJSON error: %1', $e->getMessage()));
@@ -871,9 +887,54 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
         $send();
     }
 
+    /**
+     * Reduce a bulk response to [failed item count, distinct reasons] for a single actionable
+     * error message. The raw response for a large batch is megabytes of near-identical items, so
+     * dumping it (as this used to) buries the one line that matters.
+     *
+     * @param array<string, mixed> $response
+     * @return array{0: int, 1: string}
+     */
+    private function summarizeBulkErrors(array $response): array
+    {
+        $failed = 0;
+        $reasons = [];
+
+        foreach ($response['items'] ?? [] as $item) {
+            $action = reset($item);
+            if (!is_array($action) || !isset($action['error'])) {
+                continue;
+            }
+            $failed++;
+            $reason = is_array($action['error'])
+                ? (string) ($action['error']['reason'] ?? $action['error']['type'] ?? 'unknown error')
+                : (string) $action['error'];
+
+            // Collapse the id-specific tail so N identical failures report as one reason.
+            $reasons[$reason] = true;
+        }
+
+        $distinct = array_slice(array_keys($reasons), 0, 3);
+        $suffix = count($reasons) > 3 ? sprintf(' (+%d more)', count($reasons) - 3) : '';
+
+        $hint = '';
+        foreach ($reasons as $reason => $_) {
+            if (stripos($reason, 'total fields') !== false) {
+                $hint = ' — raise Stores > Configuration > FastMagento > Indexing >'
+                    . ' "OpenSearch field limit", then reindex.';
+                break;
+            }
+        }
+
+        return [$failed, implode('; ', $distinct) . $suffix . $hint];
+    }
+
     private function buildDynamicMapping(): array
     {
-        return [
+        // total_fields.limit is applied here rather than left to the cluster default: the
+        // `attributes` object below is `dynamic: true`, so an attribute-heavy catalog will map
+        // past OpenSearch's default 1000 and the offending docs get rejected per-item during bulk.
+        return $this->indexSettings->applyTo([
             'settings' => [
                 'analysis' => [
                     'analyzer' => [
@@ -902,7 +963,7 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
                     ]
                 ]
             ]
-        ];
+        ]);
     }
 
 

@@ -24,6 +24,8 @@
                 <item name="fastmagento_generate_thesaurus" xsi:type="object">ParkkTech\FastMagento\Console\Command\GenerateThesaurus</item>
                 <item name="fastmagento_efficiency_scan" xsi:type="object">ParkkTech\FastMagento\Console\Command\EfficiencyScan</item>
                 <item name="fastmagento_efficiency_worker" xsi:type="object">ParkkTech\FastMagento\Console\Command\EfficiencyWorker</item>
+                <item name="fastmagento_doctor" xsi:type="object">ParkkTech\FastMagento\Console\Command\Doctor</item>
+                <item name="fastmagento_synonyms_import" xsi:type="object">ParkkTech\FastMagento\Console\Command\ImportSynonyms</item>
             </argument>
         </arguments>
     </type>

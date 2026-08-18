@@ -28,8 +28,14 @@ class RelevanceConfig
 
     public function __construct(
         private readonly ScopeConfigInterface $scopeConfig,
-        private readonly Json $json
+        private readonly Json $json,
+        // Optional-with-fallback so an existing install's compiled DI survives the upgrade
+        // that introduces auto-detected facets.
+        private ?\ParkkTech\FastMagento\Model\Config\Source\FacetAttributes $facetAttributeSource = null
     ) {
+        $this->facetAttributeSource = $facetAttributeSource
+            ?? \Magento\Framework\App\ObjectManager::getInstance()
+                ->get(\ParkkTech\FastMagento\Model\Config\Source\FacetAttributes::class);
     }
 
     /**
@@ -173,10 +179,16 @@ class RelevanceConfig
     public function getFacetAttributes(): array
     {
         $configured = (string) $this->value('facet_attributes');
-        if (trim($configured) === '') {
-            return [];
+        if (trim($configured) !== '') {
+            return array_values(array_filter(array_map('trim', explode(',', $configured))));
         }
-        return array_values(array_filter(array_map('trim', explode(',', $configured))));
+
+        // Blank used to mean "no attribute facets at all", so a store that never found this
+        // setting simply had none — with nothing in the UI to say so. Blank now means AUTO:
+        // derive the facets from the attributes Magento itself marks as usable in search-results
+        // layered navigation, which is exactly the set the native index makes aggregatable.
+        // An explicit value still wins, so anyone who configured this keeps their list.
+        return $this->facetAttributeSource->getAutoDetectedCodes();
     }
 
     /**

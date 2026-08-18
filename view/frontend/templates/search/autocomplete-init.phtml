@@ -1,17 +1,26 @@
 <?php
-/** @var \Magento\Framework\View\Element\Template $block */
-$suggestUrl = $block->getUrl('fastmagento/search/suggest');
-$resultsUrl = $block->getUrl('catalogsearch/result');
+/**
+ * Autocomplete boot data.
+ *
+ * Emitted as an inert application/json island rather than `text/x-magento-init`, because that
+ * tag is only executed by Magento's RequireJS bootstrap — which Hyvä does not ship. The
+ * dependency-free view/frontend/web/js/fastmagento.js reads this on DOMContentLoaded, so the
+ * same markup works on Luma, Breeze and Hyvä alike.
+ *
+ * @var \Magento\Framework\View\Element\Template $block
+ * @var \Magento\Framework\Escaper $escaper
+ */
+
+$config = [
+    'suggestUrl' => $block->getUrl('fastmagento/search/suggest'),
+    'resultsUrl' => $block->getUrl('catalogsearch/result'),
+    'minChars' => 2,
+    'delay' => 200,
+    // Optional override for themes that do not use id="search"; the JS already falls back to
+    // input[name="q"].
+    'searchInputSelector' => (string) $block->getData('search_input_selector'),
+];
 ?>
-<script type="text/x-magento-init">
-{
-    "#search": {
-        "fastmagentoAutocomplete": {
-            "suggestUrl": "<?= $block->escapeJs($suggestUrl) ?>",
-            "resultsUrl": "<?= $block->escapeJs($resultsUrl) ?>",
-            "minChars": 2,
-            "delay": 200
-        }
-    }
-}
+<script type="application/json" id="fm-autocomplete-config">
+    <?= /* @noEscape */ json_encode($config, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>
 </script>

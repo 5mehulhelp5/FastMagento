@@ -2,23 +2,26 @@
 <page xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
       xsi:noNamespaceSchemaLocation="urn:magento:framework/View/Layout/etc/page_configuration.xsd">
     <body>
-        <!-- On the results page, typing updates the whole page + facets live (instant
-             search), so suppress the autocomplete dropdown here — it is only for other
-             pages. -->
+        <!--
+            The instant-search takeover (removing native search results + layered navigation and
+            replacing them with the OpenSearch grid) is NOT done here any more.
+
+            Doing it unconditionally in layout meant that if the storefront JS could not run, the
+            page still lost its native results and rendered HTTP 200 with an empty results area —
+            a broken page rather than a missing enhancement. It is now applied by
+            Observer\ApplyInstantSearchLayout, which performs the same removals only when the
+            takeover is actually enabled, so anything else degrades to native Magento search.
+
+            Only the additive part stays in layout: the container the JS hydrates, plus the
+            autocomplete removal (on this page the header box drives the live grid, so the
+            dropdown would fight it).
+        -->
         <referenceBlock name="fastmagento.autocomplete.init" remove="true"/>
-        <!-- The instant-search grid renders its own facet sidebar, so drop the native
-             layered navigation to avoid a duplicate filter column. -->
-        <referenceBlock name="catalog.leftnav" remove="true"/>
-        <referenceBlock name="catalogsearch.leftnav" remove="true"/>
-        <referenceContainer name="sidebar.main" remove="true"/>
         <referenceContainer name="content">
-            <!-- Replace Magento's native search results with the OpenSearch instant-search
-                 grid (facets + products + pagination rendered client-side from
-                 /fastmagento/search/instant). -->
-            <referenceBlock name="search.result" remove="true"/>
             <block class="ParkkTech\FastMagento\Block\Search\InstantResults"
                    name="fastmagento.instant.search"
-                   template="ParkkTech_FastMagento::search/instant.phtml"/>
+                   template="ParkkTech_FastMagento::search/instant.phtml"
+                   ifconfig="fastmagento/search/instant_search_enabled"/>
         </referenceContainer>
     </body>
 </page>

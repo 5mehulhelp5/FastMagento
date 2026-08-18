@@ -1,6 +1,6 @@
 {
     "name": "parkktech/fastmagento",
-    "description": "FastMagento makes OpenSearch the serving layer for Magento 2 — products, category pages, search, and layered navigation are served from OpenSearch instead of MySQL, with MySQL kept as the source of truth. Drop-in, base-Magento-only (no Hyvä/Breeze required), cache/Varnish-safe, multi-store, and self-healing (every read degrades to native EAV on a miss or an OpenSearch outage).",
+    "description": "FastMagento makes OpenSearch the serving layer for Magento 2 \u2014 products, category pages, search, and layered navigation are served from OpenSearch instead of MySQL, with MySQL kept as the source of truth. Drop-in, base-Magento-only (no Hyv\u00e4/Breeze required), cache/Varnish-safe, multi-store, and self-healing (every read degrades to native EAV on a miss or an OpenSearch outage).",
     "type": "magento2-module",
     "license": [
         "OSL-3.0",
@@ -31,7 +31,7 @@
         "instant-search"
     ],
     "require": {
-        "php": ">=8.1",
+        "php": "~8.1.0||~8.2.0||~8.3.0||~8.4.0||~8.5.0",
         "magento/framework": ">=103.0.0 <104"
     },
     "autoload": {

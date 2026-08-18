@@ -1,14 +1,44 @@
 <?php
-/** @var \ParkkTech\FastMagento\Block\Search\InstantResults $block */
-$instantUrl = $block->getUrl('fastmagento/search/instant');
+/**
+ * Instant search results shell.
+ *
+ * Boot data is an inert application/json island rather than `data-mage-init`, which only runs
+ * under Magento's RequireJS bootstrap. Hyvä ships no RequireJS, so this container used to render
+ * and stay permanently empty — a blank results page rather than a missing enhancement. The
+ * dependency-free fastmagento.js reads the island and hydrates the same container on every theme.
+ *
+ * The <noscript> fallback matters for the same reason: if the JS cannot run for ANY reason, the
+ * visitor gets a working link to native Magento search instead of an empty page.
+ *
+ * @var \ParkkTech\FastMagento\Block\Search\InstantResults $block
+ */
 $columns = $block->getGridColumns();
 // Cap the responsive counts so a low desktop count never grows on smaller screens.
 $columnsMd = min($columns, 3);
 $columnsSm = min($columns, 2);
-$config = ['fastmagentoInstantSearch' => ['instantUrl' => $instantUrl, 'pageSize' => 12]];
+
+$config = [
+    'instantUrl' => $block->getUrl('fastmagento/search/instant'),
+    'pageSize' => 12,
+    'initialQuery' => (string) $block->getRequest()->getParam('q', ''),
+    'searchInputSelector' => (string) $block->getData('search_input_selector'),
+];
 ?>
-<div class="fm-instant-results"
-     style="--fm-cols: <?= (int) $columns ?>; --fm-cols-md: <?= (int) $columnsMd ?>; --fm-cols-sm: <?= (int) $columnsSm ?>;"
-     data-mage-init='<?= $block->escapeHtmlAttr(json_encode($config)) ?>'>
-    <div class="fm-results-header"><span class="fm-count">Searching…</span></div>
+<div id="fm-instant-results"
+     class="fm-instant-results"
+     style="--fm-cols: <?= (int) $columns ?>; --fm-cols-md: <?= (int) $columnsMd ?>; --fm-cols-sm: <?= (int) $columnsSm ?>;">
+    <div class="fm-results-header"><span class="fm-count"><?= $block->escapeHtml(__('Searching…')) ?></span></div>
 </div>
+
+<script type="application/json" id="fm-instant-config">
+    <?= /* @noEscape */ json_encode($config, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>
+</script>
+
+<noscript>
+    <div class="fm-no-results">
+        <?= $block->escapeHtml(__('Search requires JavaScript.')) ?>
+        <a href="<?= $block->escapeUrl($block->getUrl('catalogsearch/advanced')) ?>">
+            <?= $block->escapeHtml(__('Use advanced search instead.')) ?>
+        </a>
+    </div>
+</noscript>

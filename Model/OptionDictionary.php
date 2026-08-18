@@ -31,6 +31,9 @@ class OptionDictionary
     /** @var array<int,array<int,array{value:string,label:string}>> per-request cache: attrId => options */
     private array $cache = [];
 
+    /** @var array<string,int>|null per-request cache: attributeCode => attrId (null = not loaded) */
+    private ?array $codeMap = null;
+
     /** @var array<int,array<string,string>> per-request cache: attrId => {optionId => label} */
     private array $labelCache = [];
 
@@ -106,6 +109,73 @@ class OptionDictionary
         return array_key_exists($optionId, $map) ? $map[$optionId] : null;
     }
 
+    /**
+     * attribute_code => attribute_id for every attribute in the dictionary, resolved in ONE
+     * OpenSearch call with the (potentially huge) options array excluded from _source.
+     *
+     * Facet buckets only carry the attribute code, while the dictionary is keyed by id — this is
+     * the bridge. Kept off the DB deliberately: the whole point of the dictionary is that label
+     * resolution never touches EAV.
+     *
+     * @return array<string,int>
+     */
+    public function getAttributeIdsByCode(): array
+    {
+        if ($this->codeMap !== null) {
+            return $this->codeMap;
+        }
+        $this->codeMap = [];
+        if (!$this->isEnabled()) {
+            return $this->codeMap;
+        }
+        try {
+            $client = $this->getClient();
+            if ($client) {
+                $res = $client->search([
+                    'index' => $this->config->getAttributeOptionIndexName(),
+                    'body' => [
+                        'size' => 1000,
+                        '_source' => ['attribute_id', 'attribute_code'],
+                        'query' => ['exists' => ['field' => 'attribute_code']],
+                    ],
+                ]);
+                foreach (($res['hits']['hits'] ?? []) as $hit) {
+                    $src = $hit['_source'] ?? [];
+                    $code = (string) ($src['attribute_code'] ?? '');
+                    $id = (int) ($src['attribute_id'] ?? 0);
+                    if ($code !== '' && $id > 0) {
+                        $this->codeMap[$code] = $id;
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // index missing or OS down — caller degrades to whatever label it already had
+            $this->codeMap = [];
+        }
+        return $this->codeMap;
+    }
+
+    /**
+     * Label for one option id addressed by attribute CODE. Null on a miss.
+     *
+     * This is what makes attribute facets work on a configurable catalog. The native fulltext
+     * index stores option ids on {code} and labels on {code}_value, but on a multi-value document
+     * (any configurable parent, which carries every child's colour/size) those two arrays sort
+     * independently, so an id cannot be paired with its label from the document alone. The
+     * dictionary is an explicit id => label map, so the multi-value case stops mattering.
+     */
+    public function getOptionTextByCode(string $attributeCode, string $optionId): ?string
+    {
+        if ($attributeCode === '' || $optionId === '' || !$this->isEnabled()) {
+            return null;
+        }
+        $attributeId = $this->getAttributeIdsByCode()[$attributeCode] ?? 0;
+        if ($attributeId <= 0) {
+            return null;
+        }
+        return $this->getOptionText($attributeId, $optionId);
+    }
+
     // ── indexing ─────────────────────────────────────────────────────────────────────────────
 
     /**
@@ -129,7 +199,26 @@ class OptionDictionary
         // one pass: every option of every select/multiselect attribute, default-store label w/ admin fallback
         $select = $conn->select()
             ->from(['o' => $tOpt], ['attribute_id', 'option_id', 'sort_order'])
-            ->join(['a' => $tAttr], 'a.attribute_id = o.attribute_id', [])
+            // attribute_code is projected alongside the id so the read path can resolve a facet's
+            // code (which is all a facet carries) to its dictionary doc without touching EAV.
+            //
+            // Scoped to catalog_product on purpose: attribute codes are only unique WITHIN an
+            // entity type, and Magento ships real collisions (`gender` is both a customer and a
+            // product attribute; `page_layout` and `custom_design` are both category and product).
+            // Emitting the code for every entity type would let one overwrite the other in the
+            // code map and resolve a product facet against a customer attribute's options.
+            // Non-product attributes still get a doc — they are simply addressed by id only.
+            ->join(
+                ['a' => $tAttr],
+                'a.attribute_id = o.attribute_id',
+                []
+            )
+            ->joinLeft(
+                ['et' => $this->resource->getTableName('eav_entity_type')],
+                "et.entity_type_id = a.entity_type_id AND et.entity_type_code = 'catalog_product'",
+                []
+            )
+            ->columns(['attribute_code' => new \Zend_Db_Expr('IF(et.entity_type_id IS NULL, NULL, a.attribute_code)')])
             ->joinLeft(['va' => $tVal], 'va.option_id = o.option_id AND va.store_id = 0', [])
             ->joinLeft(['vs' => $tVal], 'vs.option_id = o.option_id AND vs.store_id = ' . (int) $storeId, [])
             ->columns(['label' => new \Zend_Db_Expr('COALESCE(vs.value, va.value)')])
@@ -159,10 +248,11 @@ class OptionDictionary
             $docs = [];
         };
 
+        $currentCode = '';
         while ($row = $stmt->fetch()) {
             $aid = (int) $row['attribute_id'];
             if ($current !== null && $aid !== $current) {
-                $docs[] = ['attribute_id' => $current, 'options' => $buffer];
+                $docs[] = ['attribute_id' => $current, 'attribute_code' => $currentCode, 'options' => $buffer];
                 $buffer = [];
                 $count++;
                 if (count($docs) >= 200) {
@@ -170,6 +260,7 @@ class OptionDictionary
                 }
             }
             $current = $aid;
+            $currentCode = (string) ($row['attribute_code'] ?? '');
             $buffer[] = [
                 'value' => (string) $row['option_id'],
                 'label' => (string) ($row['label'] ?? ''),
@@ -177,7 +268,7 @@ class OptionDictionary
             ];
         }
         if ($current !== null) {
-            $docs[] = ['attribute_id' => $current, 'options' => $buffer];
+            $docs[] = ['attribute_id' => $current, 'attribute_code' => $currentCode, 'options' => $buffer];
             $count++;
         }
         $flush($docs);

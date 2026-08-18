@@ -47,6 +47,12 @@
                     <depends><field id="instant_product_update">1</field></depends>
                     <comment>When Instant Product Update purges the cache, also purge the pages of the categories the product belongs to (so category listings reflect the edit, not just the product page). Default Yes.</comment>
                 </field>
+
+                <field id="os_total_fields_limit" translate="label comment" type="text" sortOrder="70" showInDefault="1" showInWebsite="0" showInStore="0">
+                    <label>OpenSearch Field Limit</label>
+                    <validate>validate-number validate-digits-range 1000-100000</validate>
+                    <comment><![CDATA[Maximum mapped fields per FastMagento index, applied when the index is created. OpenSearch defaults to <strong>1000</strong>, which an attribute-heavy catalogue exceeds — and because a bulk write reports rejected documents <em>per item</em> rather than failing the request, exceeding it used to drop products while the reindex still reported success. Raise this if a reindex fails with &quot;Limit of total fields ... exceeded&quot;, then reindex. Default 5000.]]></comment>
+                </field>
             </group>
 
             <!-- Instant Search + Relevance -->
@@ -94,9 +100,16 @@
                     <comment>Comma- or space-separated words ignored in queries (e.g. the, a, for, with). Pre-populated with common English stop words.</comment>
                 </field>
 
-                <field id="facet_attributes" translate="label comment" type="text" sortOrder="80" showInDefault="1" showInWebsite="1" showInStore="1">
+                <field id="facet_attributes" translate="label comment" type="multiselect" sortOrder="80" showInDefault="1" showInWebsite="1" showInStore="1">
                     <label>Facet Attributes</label>
-                    <comment>Comma-separated attribute codes to build search facets from (e.g. part_type,compatible_platforms). Must be filterable in the native search index. Category is always included. Codes that don't exist on your catalogue are skipped.</comment>
+                    <source_model>ParkkTech\FastMagento\Model\Config\Source\FacetAttributes</source_model>
+                    <comment><![CDATA[Attributes to build search facets from. <strong>Leave empty to auto-detect</strong> — every attribute below is used. The list only offers select/multiselect attributes flagged <em>Use in Search Results Layered Navigation</em>, because that is the flag that puts an attribute in the native search index; anything else silently aggregates to nothing. Category is always included. Stored as comma-separated codes, so an existing text value is preserved.]]></comment>
+                </field>
+
+                <field id="instant_search_enabled" translate="label comment" type="select" sortOrder="78" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Enable Instant Search Results</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment><![CDATA[Replace Magento's native search results page with the OpenSearch instant grid (live facets, no page reload). Set to <strong>No</strong> to fall back to native Magento search — useful on a theme whose JavaScript layer this module does not support. When No, native results and layered navigation are left untouched.]]></comment>
                 </field>
 
                 <field id="grid_columns" translate="label comment" type="text" sortOrder="85" showInDefault="1" showInWebsite="1" showInStore="1">
