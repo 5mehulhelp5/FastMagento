@@ -8,9 +8,9 @@ That means the same build runs, unchanged, on:
 
 | Storefront | Status | Notes |
 |---|---|---|
-| Default Magento (Luma / Blank) | Supported | RequireJS is present but unused. |
-| Hyvä | Supported | Hyvä ships neither jQuery nor RequireJS — which is exactly why the previous `text/x-magento-init` bootstrap silently never ran there. |
-| Swissup Breeze | Supported | No "Better Compatibility" registration needed any more; there are no RequireJS modules left to shim. |
+| Default Magento (Luma / Blank) | Supported (verified) | RequireJS is present but unused. |
+| Hyvä | Supported (verified) | Verified on Hyvä 1.5.2. Hyvä ships neither jQuery nor RequireJS — which is exactly why the previous `text/x-magento-init` bootstrap silently never ran there. |
+| Swissup Breeze | Supported (verified) | Verified on `swissup/theme-frontend-breeze-blank` 2.10 + `swissup/module-breeze` 2.x. No "Better Compatibility" registration needed any more; there are no RequireJS modules left to shim. |
 
 **None of these themes is required, and none is special-cased.**
 
@@ -53,3 +53,16 @@ The search input is located by `#search`, then `input[name="q"][type="search"]`,
     </arguments>
 </referenceBlock>
 ```
+
+## Verification matrix
+
+All three verified on the same Magento 2.4.7-p10 install with Luma sample data (2,046 products)
+and OpenSearch 2.19.5, by switching only `design/theme/theme_id`:
+
+| Storefront | Autocomplete | Instant search grid | Live faceting | Console errors |
+|---|---|---|---|---|
+| Hyvä 1.5.2 | ✅ | ✅ | ✅ 24 → 11 on a colour filter | 0 |
+| Swissup Breeze Blank 2.10 | ✅ | ✅ | ✅ 24 → 11 on a colour filter | 0 |
+| Magento Luma | ✅ | ✅ | ✅ | 0 |
+
+Identical bundle, no per-theme branches, no compatibility layer.
