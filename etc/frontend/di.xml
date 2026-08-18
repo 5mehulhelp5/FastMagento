@@ -104,6 +104,22 @@
                 sortOrder="10"/>
     </type>
 
+    <!-- Frontend-only: the layered-nav category filter re-loads the page's own category (4
+         queries) even though the controller already loaded it. See the plugin for the walk-through. -->
+    <type name="Magento\Catalog\Model\Layer\Filter\DataProvider\Category">
+        <plugin name="fastmagento_layer_category_data_provider"
+                type="ParkkTech\FastMagento\Plugin\LayerCategoryDataProviderPlugin"
+                sortOrder="10"/>
+    </type>
+
+    <!-- Frontend-only: getChildrenCategories() builds a fresh collection on every call and the
+         category filter calls it twice per listing render. Memoise it per request. -->
+    <type name="Magento\Catalog\Model\Category">
+        <plugin name="fastmagento_category_children"
+                type="ParkkTech\FastMagento\Plugin\CategoryChildrenPlugin"
+                sortOrder="10"/>
+    </type>
+
     <!-- Frontend-only: serve category collection attribute values (name/url_key/is_active/
          include_in_menu/is_anchor/all_children) from OpenSearch, skipping the native
          catalog_category_entity_* UNION loads. Covers mega-menu, top-nav, breadcrumb
