@@ -127,6 +127,20 @@ class ShellNoEavProduct extends CoreProduct
                 unset($doc[$key]);
             }
         }
+
+        // OpenSearch returns entity_id as a JSON number; a natively loaded product carries it
+        // as a PDO string. Core code that echoes the id verbatim into a JSON payload therefore
+        // emits ints for a shell and strings for a native product, and any consumer comparing
+        // it strictly against an array key (always a string in JSON) silently sees no match.
+        // Concretely: ConfigurableProduct\Helper\Data::getOptions() writes the child id into
+        // both options[attrId][value][] (raw) and index[<id>] (an array key), and Hyva's
+        // configurable-options JS intersects them with Array.includes() — int 53 never matches
+        // '53', so every swatch option resolves to "not available" and renders disabled.
+        // Normalise here, the single chokepoint every doc-backed read goes through.
+        if (isset($doc['entity_id'])) {
+            $doc['entity_id'] = (string) $doc['entity_id'];
+        }
+
         $this->doc = $doc;
     }
 

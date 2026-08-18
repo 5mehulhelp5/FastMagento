@@ -99,7 +99,7 @@ class ShellProductBuilder
         $product->setOsDoc($doc);
 
         // Example data
-        $product->setId($doc['entity_id'] ?? 0);
+        $product->setId(isset($doc['entity_id']) ? (string) $doc['entity_id'] : 0);
         $product->setSku($doc['sku'] ?? null);
         $product->setName($doc['name'] ?? null);
         $product->setStoreId($doc['store_id'] ?? 0);
@@ -230,7 +230,7 @@ class ShellProductBuilder
         $product->setOsDoc($doc);
 
         // Set Core Product Fields
-        $product->setId($doc['entity_id'] ?? 0);
+        $product->setId(isset($doc['entity_id']) ? (string) $doc['entity_id'] : 0);
         $product->setSku($doc['sku'] ?? null);
         $product->setName($doc['name'] ?? null);
         $product->setStoreId($doc['store_id'] ?? 0);

@@ -83,10 +83,18 @@
 .fm-facet-label { flex: 1; margin-left: 4px; }
 .fm-facet-count { color: #999; font-size: 12px; }
 
+/*
+   Column curve. The counts come from the template as --fm-cols / --fm-cols-md / --fm-cols-sm
+   (fastmagento/search/grid_columns), but the BREAKPOINTS are min-width and sit on the same scale
+   the Tailwind-based themes use (640 / 768 / 1024 / 1280). They used to be max-width at 640/1024,
+   which produced a curve no theme shares: at 900px the grid showed 3 columns while a Hyva listing
+   with a sidebar shows 1, so the two pages disagreed at most widths even when the desktop count
+   was set correctly. Narrowest first, so each larger tier overrides the one below.
+*/
 .fm-instant-results .fm-grid.product-items {
     display: grid !important;
-    grid-template-columns: repeat(var(--fm-cols, 3), 1fr) !important; /* default 3 to match category grid */
-    gap: 22px 20px;
+    grid-template-columns: repeat(1, 1fr) !important;
+    gap: 24px 16px; /* column gap matches the themes' gap-4 listing grid, so cards line up */
     margin: 0;
     padding: 0;
     list-style: none;
@@ -127,12 +135,23 @@
 .fm-no-results { padding: 40px 0; color: #666; font-size: 15px; }
 
 /* Match the base rule's specificity + !important so the responsive counts actually win. */
-@media (max-width: 1024px) {
-    .fm-instant-results .fm-grid.product-items { grid-template-columns: repeat(var(--fm-cols-md, 3), 1fr) !important; }
-}
-@media (max-width: 640px) {
+@media (min-width: 640px) {
     .fm-instant-results .fm-grid.product-items { grid-template-columns: repeat(var(--fm-cols-sm, 2), 1fr) !important; }
 }
+@media (min-width: 768px) {
+    /* A sidebar layout squeezes the content column hardest here — the themes drop to one card. */
+    .fm-instant-results .fm-grid.product-items { grid-template-columns: repeat(1, 1fr) !important; }
+}
+@media (min-width: 1024px) {
+    .fm-instant-results .fm-grid.product-items { grid-template-columns: repeat(var(--fm-cols-md, 2), 1fr) !important; }
+}
+@media (min-width: 1280px) {
+    .fm-instant-results .fm-grid.product-items { grid-template-columns: repeat(var(--fm-cols, 3), 1fr) !important; }
+}
+
+/* Facets hydrated into the theme's own sidebar container (see fastmagento.js resolveFacetHost):
+   the theme already sizes and positions that column, so we only style the list inside it. */
+.fm-facet-host .fm-facets { margin-bottom: 24px; }
 
 .fm-pagination { margin-top: 24px; display: flex; gap: 6px; flex-wrap: wrap; }
 .fm-page {

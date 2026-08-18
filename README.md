@@ -77,6 +77,66 @@ Full options (VCS install before Packagist, manual install, per-indexer notes) �
 > so autocomplete and instant search run identically on **default Magento (Luma/Blank)**,
 > **Swissup Breeze** and **Hyvä**. None of them is required, and none is special-cased.
 
+
+## 🩺 Troubleshooting — `bin/magento fastmagento:doctor`
+
+Every FastMagento failure mode is **silent**: the storefront keeps returning HTTP 200 while a
+feature is quietly off, so there is nothing in the logs a store owner would think to look at. The
+doctor checks each of those conditions explicitly and prints the exact command or setting that
+fixes it.
+
+```bash
+bin/magento fastmagento:doctor            # human-readable report
+bin/magento fastmagento:doctor --json     # machine-readable, for CI
+bin/magento fastmagento:doctor --strict   # exit non-zero on warnings too
+```
+
+```
+FastMagento Doctor
+
+CLUSTER
+  ✓ Cluster health                     engine=opensearch host=localhost:9200 status=yellow nodes=1
+  ✓ Index prefix                       "magedemo"
+
+INDICES
+  ✓ product serving index              magedemo_products (2046 docs)
+  ✓ attribute option dictionary        magedemo_attribute_options (17 docs)
+  ✓ Mapping headroom                   26 of 5000 fields mapped
+
+LISTING
+  ✓ Category listing source            OpenSearch (falls back to EAV per page on any index miss)
+  ✓ Listing collection class           FastMagento collection is wired in
+  ✓ User-defined attribute cache       on — attribute metadata is served from the EAV cache
+
+CHECKOUT
+  ✓ Fast checkout                      enabled
+  ✓ Hyvä checkout compatibility        Hyva_LumaCheckout enabled
+  ✓ Checkout theme static content      frontend/Magento/luma deployed for en_US
+```
+
+Run it after every install, upgrade and deploy — most of what it catches is invisible from the
+storefront, which keeps returning HTTP 200 while the feature is off.
+
+What it covers, and the real failure each check exists for:
+
+| Check | Catches |
+|---|---|
+| **Cluster health / connection** | engine not set, cluster unreachable, RED status |
+| **Index prefix** | the default `magento2` prefix shared with another install — two stores silently overwriting each other's indices |
+| **Indices + doc counts** | an index missing or holding far fewer docs than the catalogue (the signature of documents rejected during bulk while the reindex still reported success) |
+| **Mapping headroom** | approaching `total_fields.limit`, before it starts dropping products |
+| **Indexers** | any of the three missing, invalid, or left on *Update on Save* |
+| **Cron** | no recent `indexer_update_all_views` success — scheduled indexes silently going stale |
+| **Facets** | configured attributes that Magento will not aggregate, and an unbuilt option dictionary (which drops every attribute facet) |
+| **Listing** | whether the PLP is served from OpenSearch, and whether another module has re-pointed the collection virtual type |
+| **User-defined attribute cache** | `dev/caching/cache_user_defined_attributes` left off (Magento's default) — two DB queries per filterable attribute on **every** listing render, warm cache included. On a 21-attribute catalogue that was 41 of 81 warm queries |
+| **Theme** | the active theme per store view |
+| **Checkout** | fast checkout enabled, and the Hyvä Luma-checkout fallback when Hyvä is active |
+| **Checkout theme static content** | the theme `Hyva_ThemeFallback` swaps to for `/checkout/index` has no deployed CSS — checkout returns HTTP 200 with every asset 404ing underneath, RequireJS included, so the Knockout checkout never boots |
+| **PHP** | `memory_limit`, `max_execution_time` |
+
+Exit codes are CI-friendly: `0` clean, `1` if any check failed (or, with `--strict`, warned).
+
 ## Why it exists (the honest origin story)
 
 It started as one simple goal: **make Magento faster**. Then we tried to run a real store on it — a
@@ -483,9 +543,23 @@ server-rendered search results outright and returns hits in milliseconds. Endpoi
 
 The **layered-navigation "Shop By" facets on the search page update live** — tick a filter and the
 grid, pagination and facet counts all re-render in place from OpenSearch aggregations, no page
-reload. Facet option **labels come straight from the index** (no DB/EAV lookup on the request
-path), and the native Magento layered nav is replaced outright. Configure which attributes become
-facets via `FastMagento > Search > Facet Attributes`.
+reload. Facet option **labels come straight from the index** (no DB/EAV lookup on the request path).
+Configure which attributes become facets via `FastMagento > Search > Facet Attributes`.
+
+**They look like the rest of your storefront, because they are your storefront's markup.** Only the
+native product *list* is replaced; layered navigation stays, so the theme renders its own wrapper,
+heading, collapsible groups and mobile toggle — and the storefront JS refills those groups from the
+OpenSearch aggregation. No theme class is hardcoded and the module ships **no styling** for facets,
+so Hyvä, Luma and Breeze each get their own look with nothing to re-skin.
+
+The data is worth the arrangement: on one search page native layered nav aggregated no size filter,
+one colour and two categories, where the OpenSearch aggregation returned 5 / 11 / 14.
+
+**Applied filters are visible and removable** through the theme's own "currently filtering by"
+block, rendered via `Magento_LayeredNavigation::layer/state.phtml` through the theme fallback —
+again, the theme's chips, remove buttons and "Clear All". Every link it renders is a real results
+URL for the set it leads to, so removing one option, removing the last, and clearing everything are
+one code path, and they still work with JavaScript off.
 
 ## Feature: Fast Checkout — no more 30× inventory loops
 
@@ -615,16 +689,26 @@ DB), third-party extensions, SEO modules, themes and page builders keep working 
 beneath Full-Page-Cache / Varnish, and any feature can be toggled off to fall straight back to
 native behaviour. Adopt it incrementally.
 
-### Breeze (Swissup) compatible
+### Hyvä, Luma and Breeze from one bundle
 
-The bulk of FastMagento is backend, so it's theme-agnostic. Its only storefront JavaScript — the
-as-you-type **autocomplete** and the live **instant-search** results page — is plain jQuery
-bootstrapped through `text/x-magento-init` / `data-mage-init`, with **no Knockout, jQuery-UI, or
-`mage/*` widget dependencies**. That's the ideal shape for [Breeze](https://breezefront.com)'s
-**Better Compatibility** mode: `view/frontend/layout/breeze_default.xml` registers the module so
-Breeze reuses the exact same `web/js` files and `requirejs-config.js` aliases and runs them with real
-jQuery — nothing is forked into a `js/breeze/` bundle. On **native Luma** the `breeze_default` handle
-never fires, so that file is inert and the RequireJS path is untouched. **One codebase, both stacks.**
+The bulk of FastMagento is backend, so it's theme-agnostic. Its storefront JavaScript — the
+as-you-type **autocomplete** and the live **instant-search** results page — has **no dependencies**:
+no jQuery, no RequireJS, no Alpine, no Knockout. It loads as a plain deferred `<script>` and boots
+from `application/json` islands rendered by the module's own templates, so the same build runs
+unchanged on every theme. (It used to be jQuery bootstrapped through `text/x-magento-init`, which
+only Magento's RequireJS bootstrap executes — on a theme that ships no RequireJS the markup rendered
+and nothing ever read it. See [docs/THEME-COMPATIBILITY.md](docs/THEME-COMPATIBILITY.md).)
+
+Verified end-to-end on the same store, switching only the active theme — listing, product page
+swatch selection, add-to-cart and checkout on each:
+
+| Storefront | Listing | PDP swatches | Add to cart | Checkout | Warm listing queries |
+|---|---|---|---|---|---|
+| Hyvä 1.5.2 | ✓ | ✓ | ✓ | ✓ | 32 |
+| Luma | ✓ | ✓ | ✓ | ✓ | 35 |
+| Breeze Blank 2.10 | ✓ | ✓ | ✓ | ✓ | 33 |
+
+One product query per 12-product grid on all three. **One codebase, three stacks.**
 
 ---
 

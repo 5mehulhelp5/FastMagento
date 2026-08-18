@@ -14,6 +14,44 @@ That means the same build runs, unchanged, on:
 
 **None of these themes is required, and none is special-cased.**
 
+## Verified by switching themes on one store
+
+Same catalogue, same data, only `design/theme/theme_id` changed between runs. Listing, product-page
+swatch selection, add-to-cart and checkout were exercised on each:
+
+| Storefront | Listing | PDP swatches | Add to cart | Checkout | Warm listing queries | Product queries |
+|---|---|---|---|---|---|---|
+| Hyvä 1.5.2 | ✓ | ✓ | ✓ | ✓ | 32 | 1 |
+| Luma | ✓ | ✓ | ✓ | ✓ | 35 | 1 |
+| Breeze Blank 2.10 | ✓ | ✓ | ✓ | ✓ | 33 | 1 |
+
+Two notes from that run, neither a FastMagento issue but both easy to misattribute:
+
+- **Breeze throws `ReferenceError: caption is not defined`** on a PDP swatch selection. The stack is
+  entirely Swissup files (`gallery.js` template, called from Breeze's `swatch-renderer.js` while
+  updating the base image). Core's `Swatches\Helper\Data::getAllSizeImages()` returns only
+  `large`/`medium`/`small`, so the swatch media payload has never carried a `caption` — Breeze's
+  template references a variable core does not provide. Swatch selection still works; only the
+  gallery image update throws.
+- **Checkout renders in the fallback theme on every storefront theme**, not just Hyvä. Once
+  `hyva_theme_fallback/general/enable` is on it applies globally, so Luma and Breeze storefronts also
+  route `/checkout/index` to the configured `theme_full_path`.
+
+## Deploying static content for more than one theme
+
+A theme that is *registered* is compiled by `setup:static-content:deploy`, whether or not its modules
+are enabled — and one broken theme aborts the whole run, potentially mid-way through a good one.
+
+Reach for `--exclude-theme` rather than `--theme`:
+
+```bash
+bin/magento setup:static-content:deploy -f -a frontend --exclude-theme Vendor/broken-theme en_US
+```
+
+Pinning with `--theme Your/theme` also dodges the crash, but it skips **every** other theme — including
+the checkout fallback theme, which is exactly how a store ends up with a perfectly styled catalogue
+and a completely unstyled checkout. `fastmagento:doctor` checks for that case explicitly.
+
 ## What changed, and why
 
 The storefront JS used to be jQuery bootstrapped through `<script type="text/x-magento-init">` and

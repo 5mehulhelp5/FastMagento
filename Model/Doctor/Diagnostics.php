@@ -51,7 +51,8 @@ class Diagnostics
         private readonly \Magento\Framework\View\DesignInterface $design,
         private readonly \Magento\Store\Model\StoreManagerInterface $storeManager,
         private readonly \Magento\Framework\View\Design\Theme\ThemeProviderInterface $themeProvider,
-        private readonly \Magento\Framework\ObjectManager\ConfigLoaderInterface $configLoader
+        private readonly \Magento\Framework\ObjectManager\ConfigLoaderInterface $configLoader,
+        private readonly \Magento\Framework\Filesystem $filesystem
     ) {
     }
 
@@ -512,7 +513,44 @@ class Diagnostics
             $out[] = Check::skip(self::G_PLP, 'Listing collection class', $e->getMessage());
         }
 
+        $out[] = $this->checkUserDefinedAttributeCache();
+
         return $out;
+    }
+
+    /**
+     * Magento re-reads every USER-DEFINED attribute from the database on each request unless
+     * dev/caching/cache_user_defined_attributes is on — it ships off.
+     *
+     * This is the single biggest remaining cost on a listing once products come from OpenSearch,
+     * and it is not product data, which is why it survives the OpenSearch work. The search request
+     * declares one aggregation per filterable attribute, and Elasticsearch\..\Query\Builder     * Aggregation::buildBucket() resolves each bucket's field name through
+     * Eav\Model\Config::getAttribute(). With the flag off, every one of those misses the EAV cache
+     * and costs two queries — eav_attribute by code, then catalog_eav_attribute by id — on a warm
+     * cache, every request.
+     *
+     * Measured on a 21-filterable-attribute catalogue: 41 of 81 warm listing queries, gone when
+     * the flag is on. The trade-off is Magento's own: cached attribute metadata goes stale until
+     * the EAV cache is flushed, so an admin editing an attribute needs a cache flush to see it.
+     */
+    private function checkUserDefinedAttributeCache(): Check
+    {
+        if ($this->scopeConfig->isSetFlag('dev/caching/cache_user_defined_attributes')) {
+            return Check::ok(
+                self::G_PLP,
+                'User-defined attribute cache',
+                'on — attribute metadata is served from the EAV cache'
+            );
+        }
+
+        return Check::warn(
+            self::G_PLP,
+            'User-defined attribute cache',
+            'off — every filterable attribute is re-read from the database on each request',
+            'Two queries per filterable attribute per page render, warm cache included. '
+            . 'Run: bin/magento config:set dev/caching/cache_user_defined_attributes 1 '
+            . '(then cache:flush). Attribute metadata edits need a cache flush to show up.'
+        );
     }
 
     /**
@@ -602,7 +640,107 @@ class Diagnostics
             $out[] = Check::ok(self::G_CHECKOUT, 'Hyvä checkout compatibility', 'Hyva_LumaCheckout enabled');
         }
 
+        $out = array_merge($out, $this->checkFallbackThemeDeployed());
+
         return $out;
+    }
+
+    /**
+     * Hyva_LumaCheckout brings Hyva_ThemeFallback, which SWAPS THE DESIGN THEME AT RUNTIME for the
+     * configured URL segments — /checkout/index among them. So checkout renders in a different
+     * theme (Magento/luma by default) from the rest of the storefront, and that theme needs its own
+     * deployed static content.
+     *
+     * Nothing tells you when it is missing. The checkout returns HTTP 200 and every Luma
+     * CSS/JS/font/logo 404s underneath: no styling at all, and because RequireJS itself is one of
+     * the 404s the Knockout checkout never boots either. It reads as a broken module.
+     *
+     * It is easy to arrive at by accident. A full `-a frontend` deploy that dies on an unrelated
+     * broken theme can abort before reaching the fallback theme, and the natural workaround —
+     * pinning the deploy to the storefront theme with `--theme` — skips it too, every time,
+     * forever. Prefer `--exclude-theme <broken>` so additional themes keep getting deployed.
+     *
+     * @return Check[]
+     */
+    private function checkFallbackThemeDeployed(): array
+    {
+        if (!$this->scopeConfig->isSetFlag('hyva_theme_fallback/general/enable')) {
+            return [];
+        }
+
+        $themeFullPath = trim((string) $this->scopeConfig->getValue('hyva_theme_fallback/general/theme_full_path'), '/');
+        if ($themeFullPath === '') {
+            return [Check::skip(
+                self::G_CHECKOUT,
+                'Checkout theme static content',
+                'Theme fallback is on but no theme_full_path is configured'
+            )];
+        }
+
+        try {
+            $static = $this->filesystem->getDirectoryRead(\Magento\Framework\App\Filesystem\DirectoryList::STATIC_VIEW);
+        } catch (\Throwable $e) {
+            return [Check::skip(self::G_CHECKOUT, 'Checkout theme static content', $e->getMessage())];
+        }
+
+        $out = [];
+        foreach ($this->frontendLocales() as $storeCode => $locale) {
+            $base = $themeFullPath . '/' . $locale;
+
+            // A theme that was never deployed still gets a directory: Magento writes
+            // requirejs-config.js there at runtime. Deployed CSS is the honest signal.
+            $css = [];
+            try {
+                $css = $static->search($base . '/css/*.css');
+            } catch (\Throwable $e) {
+                $css = [];
+            }
+
+            if ($css) {
+                $out[] = Check::ok(
+                    self::G_CHECKOUT,
+                    sprintf('Checkout theme static content (store: %s)', $storeCode),
+                    sprintf('%s deployed for %s', $themeFullPath, $locale)
+                );
+                continue;
+            }
+
+            $out[] = Check::fail(
+                self::G_CHECKOUT,
+                sprintf('Checkout theme static content (store: %s)', $storeCode),
+                sprintf('%s has no deployed CSS for %s — checkout will render unstyled', $themeFullPath, $locale),
+                'Theme fallback renders checkout in this theme, so its static content must be '
+                . 'deployed alongside the storefront theme. Run: bin/magento '
+                . 'setup:static-content:deploy -f -a frontend ' . $locale
+                . ' (add --exclude-theme <broken-theme> rather than pinning --theme, which skips this one).'
+            );
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return array<string, string> store code => locale
+     */
+    private function frontendLocales(): array
+    {
+        $locales = [];
+        try {
+            foreach ($this->storeManager->getStores() as $store) {
+                if (!$store->getIsActive()) {
+                    continue;
+                }
+                $locales[$store->getCode()] = (string) $this->scopeConfig->getValue(
+                    'general/locale/code',
+                    \Magento\Store\Model\ScopeInterface::SCOPE_STORE,
+                    $store->getId()
+                ) ?: 'en_US';
+            }
+        } catch (\Throwable $e) {
+            $locales = [];
+        }
+
+        return $locales;
     }
 
     /**

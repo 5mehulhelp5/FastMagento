@@ -5,6 +5,72 @@ All notable changes to FastMagento are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0]
+
+### Fixed
+- **Configurable swatches did nothing when clicked** on category and product pages.
+  An OpenSearch-hydrated product returned `getId()` as an int where a natively
+  loaded one returns a PDO string, and `ConfigurableProduct\Helper\Data::getOptions()`
+  writes that id into the jsonConfig both verbatim and as an array key. The payload
+  therefore carried ints in `options[...]` against strings in `index`, and themes
+  that intersect the two with a strict comparison (Hyvä's `Array.includes()`) found
+  no match — so every option resolved to "unavailable" and rendered `disabled`.
+  Shell ids are now normalised to strings at `setOsDoc()`, matching native parity.
+- **A configurable could inherit another product's variants.** `getUsedProducts()`
+  fell back to a global `child_products` registry key holding whichever configurable
+  was hydrated last, so a product the shell path did not serve — a related-product
+  slider that fell back to the native collection — rendered the wrong `index`,
+  disabled options, and resolved a swatch click to a variant of a different product.
+  The global set is now accepted only when every shell in it belongs to that parent.
+- **The search grid did not match the category listing.** Column count came from a
+  static setting with no relationship to the active theme, the breakpoints were
+  max-width on a scale no theme shares, and the facet column was drawn inside the
+  content column while the theme's own sidebar sat empty — so the grid was narrower
+  than the listing at every width. Breakpoints are now min-width on the 640/768/
+  1024/1280 scale, and facets hydrate the theme's sidebar.
+
+### Added
+- **Search facets render in the theme's own layered-navigation markup.** Only the
+  native product list is replaced now; layered navigation stays so the theme renders
+  its wrapper, heading, collapsible groups and mobile toggle, and the storefront JS
+  refills them from the OpenSearch aggregation — which is far richer than native
+  layered nav manages on a search page. No theme class is hardcoded and the module
+  ships no styling for it, so Hyvä, Luma and Breeze each get their own look.
+  Filtering stays client-side, so as-you-type search and the facet settings still work.
+- **Applied search filters are visible and removable**, through the theme's own
+  "currently filtering by" block rendered via `Magento_LayeredNavigation::layer/state.phtml`
+  and the theme fallback. Remove and "Clear All" links are real results URLs, so one
+  handler covers every case and they still work with JS off.
+- **Doctor: user-defined attribute cache.** Magento re-reads every user-defined
+  attribute from the database on each request unless
+  `dev/caching/cache_user_defined_attributes` is on, and it ships off. Once products
+  come from OpenSearch this is the largest remaining cost on a listing — two queries
+  per filterable attribute, warm cache included. Measured on a 21-attribute
+  catalogue: 41 of 81 warm listing queries.
+- **Doctor: checkout fallback theme static content.** `Hyva_ThemeFallback` swaps the
+  design theme at runtime for `/checkout/index`, so checkout renders in a different
+  theme that needs its own deployed static content. When it is missing the checkout
+  returns HTTP 200 with every asset 404ing underneath — including RequireJS, so the
+  Knockout checkout never boots. It reads as a broken module; it is a deploy gap.
+
+### Changed
+- **Listings no longer re-fetch the category they already have.** The layered-nav
+  category filter re-loaded the page's own category (four queries) despite the
+  controller having loaded and registered it; `getChildrenCategories()` and
+  `hasChildren()` each ran twice per render with nothing caching them. Category
+  queries on a listing drop from 17 to 10, with rendered output identical.
+
+### Performance
+Measured on `/women/tops-women.html`, warm cache, 12-product grid:
+
+| | queries | category | product |
+|---|---|---|---|
+| before this release | 81 | 17 | 1 |
+| after | **32** | **10** | **1** |
+
+Cold-cache figures include ~80 `GET_LOCK`/`RELEASE_LOCK` round-trips from Magento's
+cache locking, which are not data queries — worth excluding when comparing.
+
 ## [2.3.0]
 
 ### Added

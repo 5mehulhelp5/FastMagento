@@ -55,6 +55,12 @@
          indexed catalog-rule + tier price) instead of a native child collection. Kills the
          per-child catalogrule_product_price + catalog_product_entity_tier_price N+1 on the
          configurable PDP price path. -->
+    <!-- Review stars: one review_entity_summary read per product card without this. -->
+    <type name="Magento\Review\Model\ReviewSummary">
+        <plugin name="fastmagento_review_summary"
+                type="ParkkTech\FastMagento\Plugin\Review\ReviewSummaryPlugin"/>
+    </type>
+
     <!--
         Configurable price CEILING. The "as low as" floor comes from LowestPriceOptionsProvider
         below; the max is computed by a separate class that queries the price index directly, once
@@ -95,6 +101,22 @@
     <type name="Magento\UrlRewrite\Model\UrlFinderInterface">
         <plugin name="fastmagento_category_url_finder"
                 type="ParkkTech\FastMagento\Plugin\CategoryUrlFinderPlugin"
+                sortOrder="10"/>
+    </type>
+
+    <!-- Frontend-only: the layered-nav category filter re-loads the page's own category (4
+         queries) even though the controller already loaded it. See the plugin for the walk-through. -->
+    <type name="Magento\Catalog\Model\Layer\Filter\DataProvider\Category">
+        <plugin name="fastmagento_layer_category_data_provider"
+                type="ParkkTech\FastMagento\Plugin\LayerCategoryDataProviderPlugin"
+                sortOrder="10"/>
+    </type>
+
+    <!-- Frontend-only: getChildrenCategories() builds a fresh collection on every call and the
+         category filter calls it twice per listing render. Memoise it per request. -->
+    <type name="Magento\Catalog\Model\Category">
+        <plugin name="fastmagento_category_children"
+                type="ParkkTech\FastMagento\Plugin\CategoryChildrenPlugin"
                 sortOrder="10"/>
     </type>
 
