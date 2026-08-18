@@ -890,6 +890,16 @@ On by default (`FastMagento > … attribute_pagination/enabled`); no configurati
 
 ---
 
+## 🗺️ Roadmap
+
+Search analytics, merchandising rules and campaign-targeted results, recommendations, and
+**per-shopper curation that knows the vehicle they drive and the size they wear** — planned, not
+built. The plan, the sequencing and the reasoning are in
+[**docs/ROADMAP.md**](docs/ROADMAP.md).
+
+Nothing on that page ships today. If a capability is described in this README it exists; if it is
+only on the roadmap, it does not.
+
 ## Requirements
 
 - Magento 2.4.x (Open Source / Commerce), base install.
