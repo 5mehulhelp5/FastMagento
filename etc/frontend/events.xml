@@ -4,4 +4,14 @@
         <observer name="fastmagento_apply_catalog_rule_price" instance="ParkkTech\FastMagento\Observer\ApplyCatalogRulePrice" />
     </event>
 
+    <!--
+        Applies the search-page takeover (removing native results + layered nav) only when the
+        instant search grid is actually enabled AND its block is present. Previously these
+        removals lived unconditionally in catalogsearch_result_index.xml, which stripped native
+        results even when the replacement could not render — producing a blank results page.
+    -->
+    <event name="layout_generate_blocks_after">
+        <observer name="fastmagento_apply_instant_search_layout" instance="ParkkTech\FastMagento\Observer\ApplyInstantSearchLayout" />
+    </event>
+
 </config>

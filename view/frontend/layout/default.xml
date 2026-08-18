@@ -3,6 +3,13 @@
       xsi:noNamespaceSchemaLocation="urn:magento:framework/View/Layout/etc/page_configuration.xsd">
     <head>
         <css src="ParkkTech_FastMagento::css/fastmagento-search.css"/>
+        <!--
+            Dependency-free storefront bundle: no jQuery, no RequireJS, no Alpine. Loaded as a
+            plain deferred script so it behaves identically on default Magento (Luma/Blank),
+            Swissup Breeze and Hyvä. Do NOT move this back behind text/x-magento-init — that tag
+            is only executed by Magento's RequireJS bootstrap, which Hyvä does not ship.
+        -->
+        <script src="ParkkTech_FastMagento::js/fastmagento.js" defer="true"/>
     </head>
     <body>
         <!-- Attach OpenSearch autocomplete to the header search input on every page. -->

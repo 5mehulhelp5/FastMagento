@@ -49,8 +49,14 @@ class CategoryIndexer implements ActionInterface, MviewActionInterface
         private readonly StoreManagerInterface $storeManager,
         private readonly OpenSearchConfig $openSearchConfig,
         private readonly WriteLog $writeLog,
-        private readonly ScopeConfigInterface $scopeConfig
+        private readonly ScopeConfigInterface $scopeConfig,
+        // Optional-with-fallback so an existing install's compiled DI survives the upgrade
+        // that introduces it.
+        private ?\ParkkTech\FastMagento\Model\OpenSearch\IndexSettings $indexSettings = null
     ) {
+        $this->indexSettings = $indexSettings
+            ?? \Magento\Framework\App\ObjectManager::getInstance()
+                ->get(\ParkkTech\FastMagento\Model\OpenSearch\IndexSettings::class);
     }
 
     /** Cached category url suffix for the index store (e.g. ".html"). */
@@ -262,8 +268,27 @@ class CategoryIndexer implements ActionInterface, MviewActionInterface
         try {
             $response = $client->getOpenSearchClient()->bulk(['body' => $lines]);
             if (isset($response['errors']) && $response['errors']) {
-                $this->writeLog->writeErrorLog('[FastMagento] category bulk errors: ' . json_encode($response));
+                // Per-item rejections return HTTP 200 with errors:true. Previously logged and
+                // swallowed, which let a partial category tree pass as a successful reindex.
+                $failed = 0;
+                $reasons = [];
+                foreach ($response['items'] ?? [] as $item) {
+                    $action = reset($item);
+                    if (is_array($action) && isset($action['error'])) {
+                        $failed++;
+                        $reasons[(string) ($action['error']['reason'] ?? 'unknown error')] = true;
+                    }
+                }
+                $message = (string) __(
+                    'OpenSearch rejected %1 category document(s): %2',
+                    $failed,
+                    implode('; ', array_slice(array_keys($reasons), 0, 3))
+                );
+                $this->writeLog->writeErrorLog('[FastMagento] ' . $message);
+                throw new LocalizedException(__($message));
             }
+        } catch (LocalizedException $e) {
+            throw $e;
         } catch (\Exception $e) {
             throw new LocalizedException(__('Category bulk NDJSON error: %1', $e->getMessage()));
         }
@@ -274,7 +299,7 @@ class CategoryIndexer implements ActionInterface, MviewActionInterface
      */
     private function buildMapping(): array
     {
-        return [
+        return $this->indexSettings->applyTo([
             'settings' => [
                 'analysis' => ['analyzer' => ['default' => ['type' => 'standard']]],
             ],
@@ -300,6 +325,6 @@ class CategoryIndexer implements ActionInterface, MviewActionInterface
                     'store_id' => ['type' => 'integer'],
                 ],
             ],
-        ];
+        ]);
     }
 }

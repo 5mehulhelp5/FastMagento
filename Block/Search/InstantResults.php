@@ -9,7 +9,7 @@ use ParkkTech\FastMagento\Model\Search\RelevanceConfig;
 
 /**
  * Backing block for the instant-search results grid (catalogsearch_result_index). The grid itself
- * is rendered client-side by instant-search.js; this block only exposes the configured column
+ * is rendered client-side by js/fastmagento.js; this block only exposes the configured column
  * count so the grid can match the storefront's category grid (see fastmagento/search/grid_columns)
  * instead of a CSS-hard-coded count.
  */

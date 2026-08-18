@@ -21,7 +21,9 @@ class Instant extends Action
         Context $context,
         private readonly JsonFactory $jsonFactory,
         private readonly InstantSearch $instantSearch,
-        private readonly CategoryDataProvider $categoryData
+        private readonly CategoryDataProvider $categoryData,
+        private readonly \ParkkTech\FastMagento\Model\OptionDictionary $optionDictionary,
+        private readonly \Psr\Log\LoggerInterface $logger
     ) {
         parent::__construct($context);
     }
@@ -60,6 +62,8 @@ class Instant extends Action
             $code = (string) ($facet['attribute'] ?? '');
             $isCategory = $code === 'category';
             $facet['label'] = $isCategory ? 'Category' : ucwords(str_replace('_', ' ', $code));
+            $unresolved = 0;
+            $total = count($facet['options']);
             foreach ($facet['options'] as &$option) {
                 if ($isCategory) {
                     $doc = $this->categoryData->getById((int) $option['value']);
@@ -68,10 +72,32 @@ class Instant extends Action
                         $option['skip'] = true;   // root/site categories
                     }
                 } elseif (($option['label'] ?? '') === '') {
-                    $option['skip'] = true;       // id with no OS label never show a raw id
+                    // InstantSearch can only label a bucket from an unambiguous single-value hit.
+                    // Every configurable parent is multi-value (it carries all its children's
+                    // colours/sizes), so on a configurable catalog EVERY option arrived here
+                    // unlabelled and the whole facet was dropped below. The option dictionary is
+                    // an explicit id => label map built by the fastmagento_attribute_option
+                    // indexer, which resolves exactly this case — still OpenSearch-served, no EAV.
+                    $resolved = $this->optionDictionary->getOptionTextByCode($code, (string) $option['value']);
+                    if ($resolved !== null && $resolved !== '') {
+                        $option['label'] = $resolved;
+                    } else {
+                        $option['skip'] = true;   // genuinely unresolvable — never show a raw id
+                        $unresolved++;
+                    }
                 }
             }
             unset($option);
+            // A facet that vanishes because nothing could be labelled used to be silent — the
+            // single hardest symptom to diagnose from the outside. Say so once, per facet.
+            if (!$isCategory && $unresolved > 0 && $unresolved === $total) {
+                $this->logger->warning(sprintf(
+                    '[FastMagento] Facet "%s" dropped: none of its %d option(s) could be labelled. '
+                    . 'Run: bin/magento indexer:reindex fastmagento_attribute_option',
+                    $code,
+                    $total
+                ));
+            }
             $facet['options'] = array_values(array_filter(
                 $facet['options'],
                 static fn ($o) => empty($o['skip'])

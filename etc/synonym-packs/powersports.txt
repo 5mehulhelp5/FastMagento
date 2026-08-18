@@ -1,0 +1,50 @@
+# FastMagento starter synonym pack — powersports / off-road parts.
+# Import with:  bin/magento fastmagento:synonyms:import powersports
+# One group per line, comma separated. Keep terms DISTINCTIVE: a group term that is also a
+# common catalogue word over-broadens every query that expands to it.
+
+frontend, front end
+sxs, utv
+atv, quad, four wheeler, 4 wheeler, four-wheeler
+a-arm, a arm, control arm, control-arm
+sway bar, anti-roll bar, stabilizer bar, swaybar
+light bar, led bar, light-bar
+skid plate, belly pan, skid-plate, skidplate
+tie rod, tierod, tie-rod
+rod end, heim, heim joint, heim-joint
+radius rod, radius arm, trailing arm
+can-am, canam, can am
+rzr, razor
+prerunner, pre-runner, pre runner
+bumper, bull bar, brush guard
+bra, brassiere, bralette
+helmet, lid, moto helmet
+tire, tyre, tires, tyres
+aluminum, aluminium, alu
+color, colour
+gray, grey, charcoal, slate
+merlot, burgundy, wine, maroon, bordeaux
+navy, dark blue
+blush, rose
+ivory, cream, off white
+lavender, purple, violet
+mount, bracket, tab
+bolt, screw, fastener
+shock, damper, coilover
+teal, aqua, turquoise
+beige, tan, khaki, sand
+olive, army green
+silver, metallic, gunmetal
+tee, t-shirt, tshirt
+hoodie, hoody, sweatshirt
+pants, trousers, bottoms
+sneakers, trainers, tennis shoes
+jacket, coat
+leather, genuine leather
+xs, extra small, x-small
+s, sm, small
+m, medium, med
+l, large, lg
+xl, extra large, x-large
+xxl, 2xl, double xl
+xxxl, 3xl, triple xl

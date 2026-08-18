@@ -18,18 +18,44 @@
                 <!-- When instant update purges the cache, also purge the product's category pages
                      (not just its own page). Default ON. -->
                 <instant_purge_categories>1</instant_purge_categories>
+                <!-- Max mapped fields per FastMagento OpenSearch index, applied at index-CREATE
+                     time (see Model\OpenSearch\IndexSettings). The product index maps attributes
+                     under a dynamic object, so an attribute-heavy catalog blows past OpenSearch's
+                     default 1000 — and a per-item bulk rejection does NOT fail the request, so
+                     documents used to go missing while the reindex reported success. Raise this if
+                     a reindex reports "Limit of total fields ... exceeded", then reindex. -->
+                <os_total_fields_limit>5000</os_total_fields_limit>
             </indexing>
+            <plp>
+                <!--
+                    Serve the category/search product LISTING from OpenSearch instead of EAV.
+                    Default ON: serving the catalogue from the index is what this module is for,
+                    and this is the page type where EAV hydration costs the most.
+                    Failsafe by construction — a page is served from the index only when EVERY
+                    product on it is present there; any miss, or any OpenSearch error, falls the
+                    whole page back to the native EAV load rather than rendering partial data.
+                    Set to 0 to force the native path; `bin/magento fastmagento:doctor` reports
+                    which path is live.
+                -->
+                <serve_listing>1</serve_listing>
+            </plp>
             <search>
-                <!-- Attribute facets shown on the instant search results page (comma-separated
-                     attribute codes). SELECT-type filterable attributes only: their option
-                     labels resolve cleanly from OpenSearch. Multi-select attributes are not
-                     included here — their id-to-label pairing can't be resolved from the native
-                     index alone (see InstantSearch::bucketLabel) and needs an indexed option
-                     dictionary (follow-up). Admin-overridable under FastMagento > Search.
-                     Empty by default: shipping catalogue-specific codes here would silently break
-                     facets (and previously the keyword generator) on any store lacking those exact
-                     attributes. Set real filterable codes for your catalogue. -->
+                <!-- Attribute facets on the instant search results page (comma-separated codes).
+                     EMPTY NOW MEANS AUTO-DETECT, not "none": RelevanceConfig::getFacetAttributes()
+                     derives the list from every select/multiselect attribute flagged
+                     is_filterable_in_search, which is exactly the set Magento's native index makes
+                     aggregatable. Blank previously meant no attribute facets at all, so a store
+                     that never found this setting had none and nothing said why.
+                     Multi-select and configurable-parent (multi-value) documents are handled:
+                     option labels resolve from the fastmagento_attribute_option dictionary
+                     (Model\OptionDictionary), so an id no longer has to be pairable with a label
+                     from a single hit. Set explicit codes here to override auto-detect. -->
                 <facet_attributes/>
+                <!-- Master switch for the search-page takeover: 1 = the OpenSearch instant grid
+                     replaces native search results, 0 = native Magento search (the safe fallback
+                     on a theme whose JS layer we do not support). See
+                     Observer\ApplyInstantSearchLayout. -->
+                <instant_search_enabled>1</instant_search_enabled>
                 <!-- Product columns per row on the search results grid. Set to match the theme's
                      category-listing column count so search and category pages look consistent.
                      Reduced automatically on tablet/mobile. Default 4. -->
@@ -59,51 +85,13 @@
                      Put buyer PHRASES that contain common words (e.g. "side by side" -> UTV) in the
                      per-product AI keyword layer (fm_search_keywords) instead, where they match
                      precisely. That's why "sxs, utv" lives here but "side by side" does not. -->
-                <synonyms>frontend, front end
-sxs, utv
-atv, quad, four wheeler, 4 wheeler, four-wheeler
-a-arm, a arm, control arm, control-arm
-sway bar, anti-roll bar, stabilizer bar, swaybar
-light bar, led bar, light-bar
-skid plate, belly pan, skid-plate, skidplate
-tie rod, tierod, tie-rod
-rod end, heim, heim joint, heim-joint
-radius rod, radius arm, trailing arm
-can-am, canam, can am
-rzr, razor
-prerunner, pre-runner, pre runner
-bumper, bull bar, brush guard
-bra, brassiere, bralette
-helmet, lid, moto helmet
-tire, tyre, tires, tyres
-aluminum, aluminium, alu
-color, colour
-gray, grey, charcoal, slate
-merlot, burgundy, wine, maroon, bordeaux
-navy, dark blue
-blush, rose
-ivory, cream, off white
-lavender, purple, violet
-mount, bracket, tab
-bolt, screw, fastener
-shock, damper, coilover
-teal, aqua, turquoise
-beige, tan, khaki, sand
-olive, army green
-silver, metallic, gunmetal
-tee, t-shirt, tshirt
-hoodie, hoody, sweatshirt
-pants, trousers, bottoms
-sneakers, trainers, tennis shoes
-jacket, coat
-leather, genuine leather
-xs, extra small, x-small
-s, sm, small
-m, medium, med
-l, large, lg
-xl, extra large, x-large
-xxl, 2xl, double xl
-xxxl, 3xl, triple xl</synonyms>
+                <!--
+                    Intentionally EMPTY. Synonyms are store vocabulary: shipping one store's
+                    terms as a global default silently expands every other store's queries.
+                    Starter packs live in etc/synonym-packs/ — import with
+                    `bin/magento fastmagento:synonyms:import <pack>` or paste your own here.
+                -->
+                <synonyms/>
             </search>
             <ai>
                 <claude_model>claude-opus-4-8</claude_model>
