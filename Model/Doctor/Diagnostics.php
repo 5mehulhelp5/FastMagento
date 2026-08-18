@@ -51,7 +51,8 @@ class Diagnostics
         private readonly \Magento\Framework\View\DesignInterface $design,
         private readonly \Magento\Store\Model\StoreManagerInterface $storeManager,
         private readonly \Magento\Framework\View\Design\Theme\ThemeProviderInterface $themeProvider,
-        private readonly \Magento\Framework\ObjectManager\ConfigLoaderInterface $configLoader
+        private readonly \Magento\Framework\ObjectManager\ConfigLoaderInterface $configLoader,
+        private readonly \Magento\Framework\Filesystem $filesystem
     ) {
     }
 
@@ -639,7 +640,107 @@ class Diagnostics
             $out[] = Check::ok(self::G_CHECKOUT, 'Hyvä checkout compatibility', 'Hyva_LumaCheckout enabled');
         }
 
+        $out = array_merge($out, $this->checkFallbackThemeDeployed());
+
         return $out;
+    }
+
+    /**
+     * Hyva_LumaCheckout brings Hyva_ThemeFallback, which SWAPS THE DESIGN THEME AT RUNTIME for the
+     * configured URL segments — /checkout/index among them. So checkout renders in a different
+     * theme (Magento/luma by default) from the rest of the storefront, and that theme needs its own
+     * deployed static content.
+     *
+     * Nothing tells you when it is missing. The checkout returns HTTP 200 and every Luma
+     * CSS/JS/font/logo 404s underneath: no styling at all, and because RequireJS itself is one of
+     * the 404s the Knockout checkout never boots either. It reads as a broken module.
+     *
+     * It is easy to arrive at by accident. A full `-a frontend` deploy that dies on an unrelated
+     * broken theme can abort before reaching the fallback theme, and the natural workaround —
+     * pinning the deploy to the storefront theme with `--theme` — skips it too, every time,
+     * forever. Prefer `--exclude-theme <broken>` so additional themes keep getting deployed.
+     *
+     * @return Check[]
+     */
+    private function checkFallbackThemeDeployed(): array
+    {
+        if (!$this->scopeConfig->isSetFlag('hyva_theme_fallback/general/enable')) {
+            return [];
+        }
+
+        $themeFullPath = trim((string) $this->scopeConfig->getValue('hyva_theme_fallback/general/theme_full_path'), '/');
+        if ($themeFullPath === '') {
+            return [Check::skip(
+                self::G_CHECKOUT,
+                'Checkout theme static content',
+                'Theme fallback is on but no theme_full_path is configured'
+            )];
+        }
+
+        try {
+            $static = $this->filesystem->getDirectoryRead(\Magento\Framework\App\Filesystem\DirectoryList::STATIC_VIEW);
+        } catch (\Throwable $e) {
+            return [Check::skip(self::G_CHECKOUT, 'Checkout theme static content', $e->getMessage())];
+        }
+
+        $out = [];
+        foreach ($this->frontendLocales() as $storeCode => $locale) {
+            $base = $themeFullPath . '/' . $locale;
+
+            // A theme that was never deployed still gets a directory: Magento writes
+            // requirejs-config.js there at runtime. Deployed CSS is the honest signal.
+            $css = [];
+            try {
+                $css = $static->search($base . '/css/*.css');
+            } catch (\Throwable $e) {
+                $css = [];
+            }
+
+            if ($css) {
+                $out[] = Check::ok(
+                    self::G_CHECKOUT,
+                    sprintf('Checkout theme static content (store: %s)', $storeCode),
+                    sprintf('%s deployed for %s', $themeFullPath, $locale)
+                );
+                continue;
+            }
+
+            $out[] = Check::fail(
+                self::G_CHECKOUT,
+                sprintf('Checkout theme static content (store: %s)', $storeCode),
+                sprintf('%s has no deployed CSS for %s — checkout will render unstyled', $themeFullPath, $locale),
+                'Theme fallback renders checkout in this theme, so its static content must be '
+                . 'deployed alongside the storefront theme. Run: bin/magento '
+                . 'setup:static-content:deploy -f -a frontend ' . $locale
+                . ' (add --exclude-theme <broken-theme> rather than pinning --theme, which skips this one).'
+            );
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return array<string, string> store code => locale
+     */
+    private function frontendLocales(): array
+    {
+        $locales = [];
+        try {
+            foreach ($this->storeManager->getStores() as $store) {
+                if (!$store->getIsActive()) {
+                    continue;
+                }
+                $locales[$store->getCode()] = (string) $this->scopeConfig->getValue(
+                    'general/locale/code',
+                    \Magento\Store\Model\ScopeInterface::SCOPE_STORE,
+                    $store->getId()
+                ) ?: 'en_US';
+            }
+        } catch (\Throwable $e) {
+            $locales = [];
+        }
+
+        return $locales;
     }
 
     /**
