@@ -512,7 +512,44 @@ class Diagnostics
             $out[] = Check::skip(self::G_PLP, 'Listing collection class', $e->getMessage());
         }
 
+        $out[] = $this->checkUserDefinedAttributeCache();
+
         return $out;
+    }
+
+    /**
+     * Magento re-reads every USER-DEFINED attribute from the database on each request unless
+     * dev/caching/cache_user_defined_attributes is on — it ships off.
+     *
+     * This is the single biggest remaining cost on a listing once products come from OpenSearch,
+     * and it is not product data, which is why it survives the OpenSearch work. The search request
+     * declares one aggregation per filterable attribute, and Elasticsearch\..\Query\Builder     * Aggregation::buildBucket() resolves each bucket's field name through
+     * Eav\Model\Config::getAttribute(). With the flag off, every one of those misses the EAV cache
+     * and costs two queries — eav_attribute by code, then catalog_eav_attribute by id — on a warm
+     * cache, every request.
+     *
+     * Measured on a 21-filterable-attribute catalogue: 41 of 81 warm listing queries, gone when
+     * the flag is on. The trade-off is Magento's own: cached attribute metadata goes stale until
+     * the EAV cache is flushed, so an admin editing an attribute needs a cache flush to see it.
+     */
+    private function checkUserDefinedAttributeCache(): Check
+    {
+        if ($this->scopeConfig->isSetFlag('dev/caching/cache_user_defined_attributes')) {
+            return Check::ok(
+                self::G_PLP,
+                'User-defined attribute cache',
+                'on — attribute metadata is served from the EAV cache'
+            );
+        }
+
+        return Check::warn(
+            self::G_PLP,
+            'User-defined attribute cache',
+            'off — every filterable attribute is re-read from the database on each request',
+            'Two queries per filterable attribute per page render, warm cache included. '
+            . 'Run: bin/magento config:set dev/caching/cache_user_defined_attributes 1 '
+            . '(then cache:flush). Attribute metadata edits need a cache flush to show up.'
+        );
     }
 
     /**
