@@ -503,6 +503,10 @@ child→parent lookups resolve from the indexed `parent_ids` — removing the pe
 per-card `url_rewrite` N+1, and the `catalog_product_super_link` parent N+1 that make product
 sliders quietly expensive on every page.
 
+On a product page that is the difference between **20 and 3 product queries cold** (2 warm): the
+related block is the single most expensive thing left on a PDP once the product itself comes from
+the index.
+
 ## Feature: All product types served
 
 - **Simple & Virtual** — fully served.

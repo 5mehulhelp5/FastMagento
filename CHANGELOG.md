@@ -5,6 +5,39 @@ All notable changes to FastMagento are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.1]
+
+### Fixed
+- **Related, up-sell and cross-sell blocks were never served from OpenSearch on a
+  product page.** `LinkProductCollectionPlugin` gated on `$subject->getProduct()`,
+  which is null there, so every link block fell straight through to the native EAV
+  load — silently, with nothing failing and nothing logged. A product page cost
+  ~20 product queries where a listing costs 1.
+
+  Core only assigns `_product` in `setProduct()`; the path a product page takes
+  CONSTRUCTS the collection with its root product ids instead (Hyvä's ProductList
+  view model does `create(['productIds' => $productIds])`), so `_product` is never
+  assigned. The parent id is now read from that constructor state via reflection
+  against the declaring class — `Closure::call()` cannot reach it, because it binds
+  the closure's scope to the object's `...\Interceptor` subclass, which by
+  definition cannot read a private parent property, and returns null with no error.
+
+  Falls back to the native load when the collection's link field is not
+  `entity_id` (Commerce with staging uses `row_id`, while
+  `catalog_product_link.product_id` is an entity_id, and translating that here
+  would not be safe).
+
+### Performance
+`/chaz-kangeroo-hoodie.html`, product queries (`catalog_product_entity`, price
+index, stock status, super/relation):
+
+| | cold | warm |
+|---|---|---|
+| before | 20 | 4 |
+| after | **3** | **2** |
+
+Total queries cold 140 → 112. Rendered output unchanged.
+
 ## [2.4.0]
 
 ### Fixed
