@@ -193,6 +193,13 @@ class ShellProduct extends CoreProduct
      */
     public function setOsDoc(array $doc): void
     {
+        // Match a native EAV load, which yields entity_id as a PDO string. See the longer note
+        // in ShellNoEavProduct::setOsDoc(): an int id leaks into core JSON payloads and breaks
+        // strict comparisons against JSON object keys (configurable swatch options).
+        if (isset($doc['entity_id'])) {
+            $doc['entity_id'] = (string) $doc['entity_id'];
+        }
+
         $this->doc = $doc;
     }
 

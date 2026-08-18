@@ -152,8 +152,7 @@ class Configurable extends CoreConfigurable
      */
     public function getProductByAttributes($attributesInfo, $product)
     {
-        $hasChildren = $this->registry->registry('child_products_' . (int) $product->getId())
-            || $this->registry->registry('child_products');
+        $hasChildren = $this->resolveRegisteredChildren($product) !== null;
         if (is_array($attributesInfo) && !empty($attributesInfo) && $hasChildren) {
             $codeByAttributeId = [];
             foreach ($this->getConfigurableAttributes($product) as $attribute) {
@@ -187,15 +186,10 @@ class Configurable extends CoreConfigurable
      */
     public function getUsedProducts($configurableProduct, $requiredAttributeIds = null)
     {
-        // Prefer this product's own child set (per-id key), so a second configurable in the
-        // same request can't return the first one's children; fall back to the legacy global
-        // key, then to the native DB load.
         $perIdKey = 'child_products_' . (int) $configurableProduct->getId();
-        if ($this->registry->registry($perIdKey)) {
-            return $this->registry->registry($perIdKey);
-        }
-        if ($this->registry->registry('child_products')) {
-            return $this->registry->registry('child_products');
+        $registered = $this->resolveRegisteredChildren($configurableProduct);
+        if ($registered !== null) {
+            return $registered;
         }
 
         // Fallback to Magento Core Database if not found in registry
@@ -206,5 +200,59 @@ class Configurable extends CoreConfigurable
         $this->registry->register($perIdKey, $usedProducts);
 
         return $usedProducts;
+    }
+
+    /**
+     * Children registered for THIS configurable, or null when the registry holds nothing we can
+     * prove belongs to it.
+     *
+     * The per-id key (`child_products_<parentId>`) is authoritative. The legacy global
+     * `child_products` key holds whichever configurable was hydrated last in the request, so it
+     * is only usable when every shell in it appears in this parent's own indexed child list.
+     * Without that guard a configurable the shell path did NOT serve — e.g. a related-product
+     * slider that fell back to the native collection because one linked product was missing from
+     * OpenSearch — silently inherited the main PDP product's children: its jsonConfig `index`
+     * listed the wrong simples, options with no matching child rendered disabled, and a swatch
+     * click resolved to a variant of a different product.
+     *
+     * @param \Magento\Catalog\Model\Product $configurableProduct
+     * @return \Magento\Catalog\Model\Product[]|null
+     */
+    private function resolveRegisteredChildren($configurableProduct): ?array
+    {
+        $perId = $this->registry->registry('child_products_' . (int) $configurableProduct->getId());
+        if ($perId) {
+            return $perId;
+        }
+
+        $global = $this->registry->registry('child_products');
+        if (!is_array($global) || !$global) {
+            return null;
+        }
+
+        $docChildren = $configurableProduct->getData('child_products');
+        if (!is_array($docChildren) || !$docChildren) {
+            // Not an OpenSearch-hydrated parent — nothing to match the global set against.
+            return null;
+        }
+
+        $docIds = [];
+        foreach ($docChildren as $child) {
+            $cid = (int) ($child['entity_id'] ?? 0);
+            if ($cid) {
+                $docIds[$cid] = true;
+            }
+        }
+        if (!$docIds) {
+            return null;
+        }
+
+        foreach ($global as $shell) {
+            if (!isset($docIds[(int) $shell->getId()])) {
+                return null;
+            }
+        }
+
+        return $global;
     }
 }
