@@ -27,17 +27,26 @@ class ApplyInstantSearchLayout implements ObserverInterface
     public const XML_PATH_ENABLED = 'fastmagento/search/instant_search_enabled';
 
     /**
-     * Native blocks/containers the OpenSearch grid replaces. The grid renders its own facet
-     * sidebar, so leaving these in place would duplicate the filter column.
+     * Only the native product LIST is replaced. Layered navigation and the sidebar container it
+     * lives in both stay.
+     *
+     * They used to be removed, on the reasoning that the grid draws its own facet column. That
+     * cost two things. The theme's sidebar slot sat empty (320px of dead space on a 2columns-left
+     * layout) while the JS rebuilt a narrower rail INSIDE the content column, so the results grid
+     * got ~880px where the category listing gets ~1136px and the two pages could never line up.
+     * And the hand-rolled rail could not look like the rest of the storefront without shipping a
+     * parallel stylesheet that every theme would have to be re-taught.
+     *
+     * Keeping the block means the theme renders its OWN layered navigation markup — wrapper,
+     * "Shop By" heading, collapsible groups, mobile toggle, whatever that theme does — and
+     * fastmagento.js then refills the groups from the OpenSearch aggregation (see
+     * `hydrateThemeFacets`). Native layered nav on a search page aggregates far less than we do
+     * (2 category options and 1 colour here, against our 7 / 11 plus size), so its DATA is not
+     * used; its MARKUP is. Filter clicks stay client-side, so as-you-type search and the
+     * FastMagento facet settings keep working.
      */
     private const REMOVE_BLOCKS = [
         'search.result',
-        'catalog.leftnav',
-        'catalogsearch.leftnav',
-    ];
-
-    private const REMOVE_CONTAINERS = [
-        'sidebar.main',
     ];
 
     public function __construct(private readonly ScopeConfigInterface $scopeConfig)
@@ -65,12 +74,6 @@ class ApplyInstantSearchLayout implements ObserverInterface
 
         foreach (self::REMOVE_BLOCKS as $name) {
             if ($layout->getBlock($name)) {
-                $layout->unsetElement($name);
-            }
-        }
-
-        foreach (self::REMOVE_CONTAINERS as $name) {
-            if ($layout->isContainer($name)) {
                 $layout->unsetElement($name);
             }
         }

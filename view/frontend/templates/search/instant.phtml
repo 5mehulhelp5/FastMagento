@@ -13,9 +13,14 @@
  * @var \ParkkTech\FastMagento\Block\Search\InstantResults $block
  */
 $columns = $block->getGridColumns();
-// Cap the responsive counts so a low desktop count never grows on smaller screens.
-$columnsMd = min($columns, 3);
+// Counts for the two intermediate tiers in fastmagento-search.css. Those tiers are min-width and
+// follow the 640/768/1024/1280 scale the Tailwind-based themes use, so:
+//   --fm-cols-sm  640-767   two cards fit beside each other before the sidebar returns
+//   --fm-cols-md 1024-1279  one fewer than the desktop count, the sidebar is back by here
+//   --fm-cols      >=1280   the configured desktop count
+// Both are capped so a low desktop count never GROWS on a smaller screen.
 $columnsSm = min($columns, 2);
+$columnsMd = max(1, min($columns, $columns - 1));
 
 $config = [
     'instantUrl' => $block->getUrl('fastmagento/search/instant'),

@@ -291,6 +291,9 @@
         var pageSize = config.pageSize || 12,
             controller = null,
             timer = null,
+            facetHost = null,
+            facetProtos = null,
+            facetOpen = {},
             state = {
                 q: config.initialQuery || param('q') || '',
                 page: parseInt(param('p'), 10) || 1,
@@ -389,13 +392,246 @@
             return html + '</div>';
         }
 
+        /*
+           FACETS IN THE THEME'S OWN LAYERED NAVIGATION
+           --------------------------------------------
+           The takeover leaves the native layered-nav block in place purely for its MARKUP: the
+           theme renders its wrapper, heading, collapsible groups and mobile toggle exactly as it
+           does on a category page. We then clone one of those groups as a prototype and refill
+           the list from the OpenSearch aggregation, which is richer than what native layered nav
+           puts on a search page.
+
+           Nothing here hardcodes a class name from any theme, so a Hyva / Luma / Breeze storefront
+           each gets its own styling with no stylesheet of ours involved. Clicks are intercepted
+           rather than followed, so filtering stays client-side and as-you-type search, pagination
+           and the FastMagento facet settings all keep working. The href is still a real URL, so a
+           middle-click or a crawler gets a working link.
+        */
+
+        // First element matching any of these selectors, tried IN ORDER. Not one comma-separated
+        // querySelector: that returns the first match in DOCUMENT order regardless of which
+        // selector hit, which picked an unrelated `.block-content` in the page header.
+        function firstOf(selectors) {
+            for (var i = 0; i < selectors.length; i++) {
+                var el = document.querySelector(selectors[i]);
+                if (el) {
+                    return el;
+                }
+            }
+            return null;
+        }
+
+        // The container the theme drops its filter groups into. Resolved from a rendered group,
+        // so it is the right element whatever the theme calls it; then the layered-nav content
+        // element by id/class; then the sidebar itself. Null on a 1-column layout or a theme with
+        // none of these, and render() falls back to the self-contained rail.
+        function resolveFacetHost() {
+            var group = document.querySelector('.filter-option, .filter-options-item'),
+                host = (group && group.parentElement)
+                    || firstOf(['#filters-content', '.filter-content', '.sidebar-main', '.sidebar-additional']);
+            // Never hijack a container that holds the results themselves.
+            return host && !host.contains(root) ? host : null;
+        }
+
+        // One rendered filter group + one option row, kept before the first refill overwrites
+        // them. Prefer a group whose options are a plain list — a swatch group's row carries
+        // markup specific to that attribute and does not generalise.
+        function captureProtos(host) {
+            var groups = host.querySelectorAll('.filter-option, .filter-options-item'),
+                i,
+                list;
+            for (i = 0; i < groups.length; i++) {
+                list = groups[i].querySelector('.items li, .item');
+                if (list) {
+                    return {group: groups[i].cloneNode(true), option: list.cloneNode(true)};
+                }
+            }
+            return null;
+        }
+
+        // Text of the deepest element holding the group's title, without disturbing the
+        // screen-reader suffix ("... filter") templates put beside it.
+        function setGroupTitle(group, label) {
+            var el = group.querySelector('h2, h3, .filter-options-title'),
+                target;
+            if (!el) {
+                return;
+            }
+            target = el.querySelector('h2, h3') || el;
+            // First text node only, so an <span class="sr-only"> sibling survives.
+            for (var n = target.firstChild; n; n = n.nextSibling) {
+                if (n.nodeType === 3 && n.nodeValue.trim()) {
+                    n.nodeValue = label;
+                    return;
+                }
+            }
+            target.insertBefore(document.createTextNode(label), target.firstChild);
+        }
+
+        // <details> is what the Tailwind-based themes use; `aria-expanded` covers a theme that
+        // drives its groups from a button instead.
+        function isGroupOpen(group) {
+            if (group.tagName === 'DETAILS') {
+                return group.open;
+            }
+            var toggle = group.querySelector('[aria-expanded]');
+            return toggle ? toggle.getAttribute('aria-expanded') === 'true' : false;
+        }
+
+        function setGroupOpen(group, open) {
+            if (group.tagName === 'DETAILS') {
+                group.open = open;
+                return;
+            }
+            var toggle = group.querySelector('[aria-expanded]');
+            if (toggle) {
+                toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            }
+        }
+
+        function buildOption(proto, facet, opt, selected) {
+            var li = proto.cloneNode(true),
+                link = li.querySelector('a') || li,
+                count = li.querySelector('.count'),
+                labelEl;
+
+            // The label lives in the first span that is not the count and not screen-reader-only.
+            labelEl = Array.prototype.filter.call(link.querySelectorAll('span'), function (s) {
+                return !s.classList.contains('count') && !s.classList.contains('sr-only');
+            })[0] || link;
+
+            labelEl.textContent = opt.label;
+            if (count) {
+                count.textContent = '(' + opt.count + ')';
+            }
+            if (link.tagName === 'A') {
+                link.setAttribute('href', filterHref(facet.attribute, opt.value));
+                link.setAttribute('rel', 'nofollow');
+            }
+            // The prototype carries the label + count of whatever option the theme happened to
+            // render, phrased in the storefront locale. Rewriting that sentence here would mean
+            // inventing a translation, so drop it: the link's own text ("XS (39)") is then its
+            // accessible name, which is accurate in every locale.
+            link.removeAttribute('aria-label');
+            li.setAttribute('data-fm-facet', facet.attribute);
+            li.setAttribute('data-fm-value', opt.value);
+
+            // An applied option stays in the list (clicking it again clears the filter), so it
+            // needs a visible state. Native layered nav has no such state — it moves applied
+            // filters to the "Now Shopping By" block instead — so there is no theme class that
+            // means "this option is on". aria-current is the standards answer and is what a
+            // screen reader announces; the utility class beside it is one the theme already
+            // compiles, so the emphasis comes from the theme's stylesheet rather than ours. On a
+            // theme that does not ship that utility the class is simply inert and the option is
+            // still announced correctly.
+            if (selected) {
+                link.setAttribute('aria-current', 'page');
+                if (link.classList) {
+                    link.classList.add('aria-[current=page]:font-medium');
+                }
+            }
+            return li;
+        }
+
+        // Refill the theme's filter groups, leaving everything else it rendered (heading, state
+        // block, skip link, mobile toggle) untouched.
+        //
+        // A group already on the page is REUSED rather than re-cloned. Re-cloning reset every
+        // <details> to closed on each filter click, so the accordion a shopper had opened snapped
+        // shut under them the moment they picked an option — the group node carries that
+        // open/expanded state, so keeping the node keeps the state. It also keeps focus and any
+        // behaviour the theme bound to that element.
+        function hydrateThemeFacets(facets) {
+            var previous = {},
+                seen = {},
+                existing = facetHost.querySelectorAll('[data-fm-facet-group]'),
+                orphans,
+                i;
+
+            for (i = 0; i < existing.length; i++) {
+                previous[existing[i].getAttribute('data-fm-facet-group')] = existing[i];
+                // Remember it even for a group that is about to disappear: narrowing the query can
+                // drop an attribute from the aggregation and a later keystroke bring it back, and
+                // that returning group is a fresh clone which would otherwise come back collapsed.
+                facetOpen[existing[i].getAttribute('data-fm-facet-group')] = isGroupOpen(existing[i]);
+            }
+
+            (facets || []).forEach(function (facet) {
+                var group = previous[facet.attribute] || facetProtos.group.cloneNode(true),
+                    list = group.querySelector('.items') || group.querySelector('ol, ul'),
+                    chosen = state.filters[facet.attribute] || [];
+                if (!list) {
+                    return;
+                }
+                setGroupTitle(group, facet.label);
+                list.innerHTML = '';
+                (facet.options || []).forEach(function (opt) {
+                    list.appendChild(buildOption(
+                        facetProtos.option,
+                        facet,
+                        opt,
+                        chosen.indexOf(String(opt.value)) > -1
+                    ));
+                });
+                group.setAttribute('data-fm-facet-group', facet.attribute);
+                if (!previous[facet.attribute] && facetOpen[facet.attribute]) {
+                    setGroupOpen(group, true);
+                }
+                seen[facet.attribute] = true;
+                // appendChild on a node already here just re-orders it, keeping its state.
+                facetHost.appendChild(group);
+            });
+
+            // Groups the new aggregation no longer returns.
+            orphans = facetHost.querySelectorAll('[data-fm-facet-group], .filter-option, .filter-options-item');
+            for (i = 0; i < orphans.length; i++) {
+                if (!seen[orphans[i].getAttribute('data-fm-facet-group')]) {
+                    orphans[i].parentNode.removeChild(orphans[i]);
+                }
+            }
+        }
+
+        // A real, shareable URL for one option on top of the current selection.
+        function filterHref(code, value) {
+            var params = ['q=' + encodeURIComponent(state.q)],
+                merged = {};
+            Object.keys(state.filters).forEach(function (k) {
+                merged[k] = (state.filters[k] || []).slice();
+            });
+            merged[code] = merged[code] || [];
+            if (merged[code].indexOf(String(value)) === -1) {
+                merged[code].push(String(value));
+            }
+            Object.keys(merged).forEach(function (k) {
+                if (merged[k].length) {
+                    params.push('filter[' + k + ']=' + encodeURIComponent(merged[k].join(',')));
+                }
+            });
+            return window.location.pathname + '?' + params.join('&');
+        }
+
         function render(data) {
-            root.innerHTML = '<div class="fm-results-header"><span class="fm-count">'
-                + escapeHtml(data.total) + ' result' + (data.total === 1 ? '' : 's')
-                + (data.query ? ' for “' + escapeHtml(data.query) + '”' : '')
-                + '</span></div><div class="fm-results-body"><aside class="fm-sidebar">'
-                + renderFacets(data.facets) + '</aside><div class="fm-results-main">'
-                + renderProducts(data.products || []) + renderPagination(data) + '</div></div>';
+            var header = '<div class="fm-results-header"><span class="fm-count">'
+                    + escapeHtml(data.total) + ' result' + (data.total === 1 ? '' : 's')
+                    + (data.query ? ' for “' + escapeHtml(data.query) + '”' : '')
+                    + '</span></div>',
+                body = renderProducts(data.products || []) + renderPagination(data),
+                facets = renderFacets(data.facets);
+
+            if (facetHost && facetProtos) {
+                hydrateThemeFacets(data.facets);
+                root.innerHTML = header + body;
+                return;
+            }
+
+            if (facetHost) {
+                facetHost.innerHTML = facets;
+                root.innerHTML = header + body;
+                return;
+            }
+
+            root.innerHTML = header + '<div class="fm-results-body"><aside class="fm-sidebar">'
+                + facets + '</aside><div class="fm-results-main">' + body + '</div></div>';
         }
 
         function load() {
@@ -420,8 +656,9 @@
                 .then(function () { root.classList.remove('fm-loading'); });
         }
 
-        // Delegated so the handlers survive every re-render.
-        root.addEventListener('change', function (e) {
+        // Delegated so the handlers survive every re-render. Bound to BOTH hosts because the
+        // facets may live outside `root` now (in the theme's sidebar).
+        function onFacetChange(e) {
             var el = e.target;
             if (!el.matches || !el.matches('input[type="checkbox"][data-facet]')) {
                 return;
@@ -438,7 +675,47 @@
             state.filters[code] = list;
             state.page = 1;
             load();
-        });
+        }
+
+        facetHost = resolveFacetHost();
+        if (facetHost) {
+            // Grab the theme's markup BEFORE the first refill replaces it.
+            facetProtos = captureProtos(facetHost);
+            facetHost.addEventListener('change', onFacetChange);
+            facetHost.addEventListener('click', onFacetClick);
+            if (!facetProtos) {
+                // Self-contained rail: it needs our stylesheet, the theme's markup does not.
+                facetHost.classList.add('fm-facet-host');
+            }
+        }
+
+        root.addEventListener('change', onFacetChange);
+
+        // Theme-rendered options are links, so filtering stays a client-side toggle instead of a
+        // page load. The href remains valid for middle-click / no-JS.
+        function onFacetClick(e) {
+            var row = e.target.closest ? e.target.closest('[data-fm-facet]') : null,
+                code,
+                value,
+                list,
+                idx;
+            if (!row) {
+                return;
+            }
+            e.preventDefault();
+            code = row.getAttribute('data-fm-facet');
+            value = String(row.getAttribute('data-fm-value'));
+            list = state.filters[code] || [];
+            idx = list.indexOf(value);
+            if (idx > -1) {
+                list.splice(idx, 1);
+            } else {
+                list.push(value);
+            }
+            state.filters[code] = list;
+            state.page = 1;
+            load();
+        }
 
         root.addEventListener('click', function (e) {
             var btn = e.target.closest ? e.target.closest('.fm-page') : null;
