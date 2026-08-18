@@ -53,18 +53,19 @@ class LinkProductCollectionPlugin
     public function aroundLoad(Collection $subject, callable $proceed, $printQuery = false, $logQuery = false)
     {
         try {
+            $parentId = $this->resolveParentId($subject);
+
             if ($subject->isLoaded()
                 || $this->appState->getAreaCode() !== 'frontend'
                 || !$subject->getLinkModel()
                 || !$subject->getLinkModel()->getLinkTypeId()
-                || !$subject->getProduct()
-                || !$subject->getProduct()->getId()
+                || !$parentId
             ) {
                 return $proceed($printQuery, $logQuery);
             }
 
             $ids = $this->getLinkedIds(
-                (int) $subject->getProduct()->getId(),
+                $parentId,
                 (int) $subject->getLinkModel()->getLinkTypeId()
             );
             if (!$ids) {
@@ -107,6 +108,62 @@ class LinkProductCollectionPlugin
             );
             return $proceed($printQuery, $logQuery);
         }
+    }
+
+    /**
+     * The product whose links are being loaded.
+     *
+     * `getProduct()` is the obvious answer and is null more often than not. Core sets `_product`
+     * only in `setProduct()`; the path a product page actually takes CONSTRUCTS the collection with
+     * its root product ids instead (see the `$productIds` constructor argument), so `_product` is
+     * never assigned and `getProduct()` returns null for the whole life of the collection.
+     *
+     * Gating on `getProduct()` therefore meant this plugin never fired on a product page at all —
+     * every related / up-sell / cross-sell block silently fell through to the native EAV load, and
+     * the OpenSearch serving this class exists to do simply never happened. The symptom was a
+     * product page costing ~20 product queries where a listing costs 1, with nothing failing.
+     *
+     * So fall back to the private `$productIds` the constructor filled. Those hold LINK FIELD
+     * values, which equal `entity_id` on Community but are `row_id` on Commerce with staging —
+     * and `catalog_product_link.product_id` is an entity_id. When the two differ we cannot safely
+     * translate here, so we return null and let the native load handle it.
+     *
+     * @return int|null
+     */
+    private function resolveParentId(Collection $subject): ?int
+    {
+        $product = $subject->getProduct();
+        if ($product && $product->getId()) {
+            return (int) $product->getId();
+        }
+
+        try {
+            // Reflection against the DECLARING class, not the object.
+            // $subject is an ...\Interceptor subclass, and `Closure::call()` binds the closure's
+            // scope to the object's class — a subclass, which by definition cannot read a private
+            // parent property. It returns null silently, which reads exactly like "no ids set".
+            $property = new \ReflectionProperty(Collection::class, 'productIds');
+            $property->setAccessible(true);
+            $ids = $property->getValue($subject);
+
+            $linkField = \Closure::bind(
+                function () {
+                    return $this->getLinkField();
+                },
+                $subject,
+                Collection::class
+            )();
+        } catch (\Throwable $e) {
+            return null;
+        }
+
+        if ($linkField !== 'entity_id' || !is_array($ids) || count($ids) !== 1) {
+            return null;
+        }
+
+        $parentId = (int) reset($ids);
+
+        return $parentId > 0 ? $parentId : null;
     }
 
     /**
