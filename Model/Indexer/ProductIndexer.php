@@ -446,6 +446,7 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
                     'websites'     => $this->batchWebsiteIds($batchIds),
                     'childLinks'   => $this->batchChildLinks($batchIds),
                     'catLinkCount' => $this->batchCategoryLinkCounts($batchIds),
+                    'reviews'      => $this->batchReviewSummary($batchIds, $storeId),
                 ];
                 foreach ($collection as $product) {
                     try {
@@ -752,6 +753,60 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
      * @param int[] $productIds
      * @return array<int, array<string, mixed>>
      */
+    /**
+     * Single-product review summary, for the per-product indexing path (composite types).
+     *
+     * @return array{reviews_count: int, rating_summary: int}
+     */
+    private function getReviewSummaryFor(int $productId, int $storeId): array
+    {
+        $none = ['reviews_count' => 0, 'rating_summary' => 0];
+        if ($productId <= 0) {
+            return $none;
+        }
+        return $this->batchReviewSummary([$productId], $storeId)[$productId] ?? $none;
+    }
+
+    /**
+     * reviews_count + rating_summary for a whole chunk in one query.
+     *
+     * Store-scoped: review_entity_summary holds a row per (product, store), and entity_type 1 is
+     * the product entity in Magento's review schema.
+     *
+     * @param int[] $productIds
+     * @return array<int, array{reviews_count: int, rating_summary: int}>
+     */
+    private function batchReviewSummary(array $productIds, int $storeId): array
+    {
+        if (!$productIds) {
+            return [];
+        }
+        try {
+            $connection = $this->productCollectionFactory->create()->getConnection();
+            $select = $connection->select()
+                ->from(
+                    $connection->getTableName('review_entity_summary'),
+                    ['entity_pk_value', 'reviews_count', 'rating_summary']
+                )
+                ->where('entity_pk_value IN (?)', $productIds)
+                ->where('store_id = ?', $storeId)
+                ->where('entity_type = ?', 1);
+
+            $out = [];
+            foreach ($connection->fetchAll($select) as $row) {
+                $out[(int) $row['entity_pk_value']] = [
+                    'reviews_count' => (int) $row['reviews_count'],
+                    'rating_summary' => (int) $row['rating_summary'],
+                ];
+            }
+            return $out;
+        } catch (\Throwable $e) {
+            // Reviews are decorative; never fail an index build over them.
+            $this->logger->warning('[FastMagento] review summary batch failed: ' . $e->getMessage());
+            return [];
+        }
+    }
+
     private function batchMediaGallery(array $productIds, int $storeId): array
     {
         if (!$productIds) {
@@ -1049,6 +1104,21 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
                 'qty' => (float)$product->getExtensionAttributes()?->getStockItem()?->getQty()
             ];
         }
+
+        // Review stars are rendered on every product card, and Magento resolves them one product
+        // at a time (Review\Model\ReviewSummary::appendSummaryDataToObject), so a listing pays one
+        // review_entity_summary query per card. Served back by Plugin\Review\ReviewSummaryPlugin.
+        //
+        // Deliberately OUTSIDE the batched/non-batched branches above: composite products are
+        // routed through the per-product path, so projecting this only in the batched branch left
+        // every configurable without review data — the exact products a listing is usually made of.
+        // A product with no reviews is written as 0/0 rather than omitted, so the read path can
+        // tell "no reviews" from "not indexed" and only falls back to SQL for the latter.
+        $rev = $this->batchCtx !== null
+            ? ($this->batchCtx['reviews'][$pid] ?? ['reviews_count' => 0, 'rating_summary' => 0])
+            : $this->getReviewSummaryFor($pid, (int) $product->getStoreId());
+        $productData['reviews_count'] = (int) $rev['reviews_count'];
+        $productData['rating_summary'] = (int) $rev['rating_summary'];
 
         //  $productData['media_gallery'] = $this->getMediaGallery($product);
          $productData['child_products'] = $this->getChildProducts($product);

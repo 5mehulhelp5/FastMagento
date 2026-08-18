@@ -77,6 +77,55 @@ Full options (VCS install before Packagist, manual install, per-indexer notes) �
 > so autocomplete and instant search run identically on **default Magento (Luma/Blank)**,
 > **Swissup Breeze** and **Hyvä**. None of them is required, and none is special-cased.
 
+
+## 🩺 Troubleshooting — `bin/magento fastmagento:doctor`
+
+Every FastMagento failure mode is **silent**: the storefront keeps returning HTTP 200 while a
+feature is quietly off, so there is nothing in the logs a store owner would think to look at. The
+doctor checks each of those conditions explicitly and prints the exact command or setting that
+fixes it.
+
+```bash
+bin/magento fastmagento:doctor            # human-readable report
+bin/magento fastmagento:doctor --json     # machine-readable, for CI
+bin/magento fastmagento:doctor --strict   # exit non-zero on warnings too
+```
+
+```
+FastMagento Doctor
+
+CLUSTER
+  ✓ Cluster health                     engine=opensearch host=localhost:9200 status=yellow nodes=1
+  ✓ Index prefix                       "magedemo"
+
+INDICES
+  ✓ product serving index              magedemo_products (2046 docs)
+  ✓ attribute option dictionary        magedemo_attribute_options (17 docs)
+  ✓ Mapping headroom                   26 of 5000 fields mapped
+
+LISTING
+  ✓ Category listing source            OpenSearch (falls back to EAV per page on any index miss)
+  ✓ Listing collection class           FastMagento collection is wired in
+```
+
+What it covers, and the real failure each check exists for:
+
+| Check | Catches |
+|---|---|
+| **Cluster health / connection** | engine not set, cluster unreachable, RED status |
+| **Index prefix** | the default `magento2` prefix shared with another install — two stores silently overwriting each other's indices |
+| **Indices + doc counts** | an index missing or holding far fewer docs than the catalogue (the signature of documents rejected during bulk while the reindex still reported success) |
+| **Mapping headroom** | approaching `total_fields.limit`, before it starts dropping products |
+| **Indexers** | any of the three missing, invalid, or left on *Update on Save* |
+| **Cron** | no recent `indexer_update_all_views` success — scheduled indexes silently going stale |
+| **Facets** | configured attributes that Magento will not aggregate, and an unbuilt option dictionary (which drops every attribute facet) |
+| **Listing** | whether the PLP is served from OpenSearch, and whether another module has re-pointed the collection virtual type |
+| **Theme** | the active theme per store view |
+| **Checkout** | fast checkout enabled, and the Hyvä Luma-checkout fallback when Hyvä is active |
+| **PHP** | `memory_limit`, `max_execution_time` |
+
+Exit codes are CI-friendly: `0` clean, `1` if any check failed (or, with `--strict`, warned).
+
 ## Why it exists (the honest origin story)
 
 It started as one simple goal: **make Magento faster**. Then we tried to run a real store on it — a
