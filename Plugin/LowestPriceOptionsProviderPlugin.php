@@ -7,6 +7,7 @@ namespace ParkkTech\FastMagento\Plugin;
 use Magento\Catalog\Api\Data\ProductInterface;
 use Magento\ConfigurableProduct\Pricing\Price\LowestPriceOptionsProvider;
 use Magento\Framework\Registry;
+use ParkkTech\FastMagento\Helper\ShellProductBuilder;
 use ParkkTech\FastMagento\Model\ShellProduct\ShellNoEavProduct;
 
 /**
@@ -28,8 +29,10 @@ use ParkkTech\FastMagento\Model\ShellProduct\ShellNoEavProduct;
  */
 class LowestPriceOptionsProviderPlugin
 {
-    public function __construct(private Registry $registry)
-    {
+    public function __construct(
+        private Registry $registry,
+        private readonly ShellProductBuilder $shellProductBuilder
+    ) {
     }
 
     /**
@@ -70,11 +73,74 @@ class LowestPriceOptionsProviderPlugin
                 }
 
                 if ($matches) {
-                    return $shells;
+                    return $this->preferInStock($shells, $docChildren) ?? $proceed($product);
+                }
+            }
+
+            // v2.5.1: SELF-SUFFICIENT substitution. The registry handshake above depends on the
+            // hydration path having registered this exact parent's shells earlier in the request —
+            // a timing coupling that a support case (Magento 2.4.9 + MSI) showed can silently miss,
+            // at which point proceed() runs the native select whose MSI-injected stock-status join
+            // is one query PER CONFIGURABLE on a listing (the reported "12 stock queries on a cold
+            // PLP"). The parent shell already CARRIES everything needed in its own doc data, so
+            // when the registry cannot answer, build the child shells right here — pure PHP from
+            // the indexed arrays, zero SQL — instead of falling through to the database.
+            if (is_array($docChildren) && $docChildren) {
+                try {
+                    $built = [];
+                    foreach ($docChildren as $childDoc) {
+                        if (!is_array($childDoc) || empty($childDoc['entity_id'])) {
+                            $built = [];
+                            break;
+                        }
+                        $shell = $this->shellProductBuilder->buildNoEavProductFromOsDoc($childDoc);
+                        if (!$shell || !$shell->getId()) {
+                            $built = [];
+                            break;
+                        }
+                        $built[] = $shell;
+                    }
+                    if ($built) {
+                        $substituted = $this->preferInStock($built, $docChildren);
+                        if ($substituted !== null) {
+                            return $substituted;
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    // Correct prices over fast prices: any doubt defers to the native provider.
                 }
             }
         }
 
         return $proceed($product);
+    }
+
+    /**
+     * Keep only the children the doc says are in stock — the same semantics MSI's
+     * StockStatusBaseSelectProcessor enforces with its SQL join, so the "as low as" price never
+     * comes from an unbuyable variant. Returns null when NO child is in stock: an all-out-of-stock
+     * configurable is the edge where native behaviour (and its own display rules) should decide,
+     * not us.
+     *
+     * @param ShellNoEavProduct[] $shells
+     * @param array<int, array<string, mixed>> $docChildren
+     * @return ShellNoEavProduct[]|null
+     */
+    private function preferInStock(array $shells, array $docChildren): ?array
+    {
+        $inStockIds = [];
+        foreach ($docChildren as $child) {
+            if (!empty($child['is_in_stock']) && !empty($child['entity_id'])) {
+                $inStockIds[(int) $child['entity_id']] = true;
+            }
+        }
+        if ($inStockIds === []) {
+            return null;
+        }
+        $filtered = array_values(array_filter(
+            $shells,
+            static fn ($shell) => isset($inStockIds[(int) $shell->getId()])
+        ));
+        return $filtered !== [] ? $filtered : null;
     }
 }
