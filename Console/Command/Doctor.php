@@ -26,10 +26,13 @@ class Doctor extends Command
 {
     private const OPT_JSON = 'json';
     private const OPT_STRICT = 'strict';
+    private const OPT_FIX = 'fix';
 
     public function __construct(
         private readonly Diagnostics $diagnostics,
         private readonly State $appState,
+        private readonly \ParkkTech\FastMagento\Model\Setup\FacetAutoConfigurator $facetAutoConfigurator,
+        private readonly \ParkkTech\FastMagento\Model\Plp\FallbackRecorder $plpFallbackRecorder,
         ?string $name = null
     ) {
         parent::__construct($name);
@@ -40,7 +43,15 @@ class Doctor extends Command
         $this->setName('fastmagento:doctor')
             ->setDescription('Diagnose why FastMagento is not serving (indices, indexers, cron, facets, theme, checkout)')
             ->addOption(self::OPT_JSON, null, InputOption::VALUE_NONE, 'Output machine-readable JSON')
-            ->addOption(self::OPT_STRICT, null, InputOption::VALUE_NONE, 'Exit non-zero on warnings as well as failures');
+            ->addOption(self::OPT_STRICT, null, InputOption::VALUE_NONE, 'Exit non-zero on warnings as well as failures')
+            ->addOption(
+                self::OPT_FIX,
+                null,
+                InputOption::VALUE_NONE,
+                'Apply the safe auto-remediations before diagnosing: enable search-facet flags for '
+                . 'attributes already filterable in category navigation (when none are usable), and '
+                . 'clear the recorded listing-fallback history so the next report reflects current behaviour'
+            );
 
         parent::configure();
     }
@@ -53,6 +64,23 @@ class Doctor extends Command
             $this->appState->setAreaCode(Area::AREA_FRONTEND);
         } catch (\Throwable $e) {
             // area already set
+        }
+
+        if ($input->getOption(self::OPT_FIX)) {
+            $mirrored = [];
+            try {
+                $mirrored = $this->facetAutoConfigurator->mirrorIfUnconfigured();
+            } catch (\Throwable $e) {
+                $output->writeln('<comment>--fix: facet auto-configuration failed: ' . $e->getMessage() . '</comment>');
+            }
+            $output->writeln($mirrored
+                ? '<info>--fix: enabled "Use in Search Results Layered Navigation" for: '
+                    . implode(', ', $mirrored) . ' (indexers invalidated — reindex to project the data)</info>'
+                : '--fix: facet flags already in order, nothing to mirror');
+
+            $this->plpFallbackRecorder->clear();
+            $output->writeln('--fix: listing-fallback history cleared (doctor now reports only NEW fallbacks)');
+            $output->writeln('');
         }
 
         $checks = $this->diagnostics->run();

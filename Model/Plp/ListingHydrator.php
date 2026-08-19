@@ -10,6 +10,7 @@ use Magento\Store\Model\ScopeInterface;
 use Magento\Store\Model\StoreManagerInterface;
 use ParkkTech\FastMagento\Helper\OpenSearchPdpFetcher;
 use ParkkTech\FastMagento\Helper\ShellProductBuilder;
+use ParkkTech\FastMagento\Model\Plp\FallbackRecorder;
 use Psr\Log\LoggerInterface;
 
 /**
@@ -45,7 +46,8 @@ class ListingHydrator
         private readonly OpenSearchPdpFetcher $fetcher,
         private readonly ShellProductBuilder $shellBuilder,
         private readonly StoreManagerInterface $storeManager,
-        private readonly LoggerInterface $logger
+        private readonly LoggerInterface $logger,
+        private readonly FallbackRecorder $fallbackRecorder
     ) {
     }
 
@@ -83,6 +85,12 @@ class ListingHydrator
                     count($ids),
                     implode(',', array_slice($missing, 0, 10))
                 ));
+                $this->fallbackRecorder->record(sprintf(
+                    '%d of %d product(s) missing from the index (index behind the catalogue — '
+                    . 'reindex fastmagento_product and make sure Magento cron runs)',
+                    count($missing),
+                    count($ids)
+                ));
                 return false;
             }
 
@@ -97,6 +105,11 @@ class ListingHydrator
                 // (123 vs 15 product queries on a 12-configurable page).
                 $product = $this->shellBuilder->buildNoEavProductFromOsDoc($docs[$id], true);
                 if (!$product || !$product->getId()) {
+                    $this->fallbackRecorder->record(sprintf(
+                        'product %d has an index doc that could not build a shell product '
+                        . '(reindex fastmagento_product)',
+                        (int) $id
+                    ));
                     return false;
                 }
                 $product->setStoreId($storeId);
@@ -116,6 +129,7 @@ class ListingHydrator
             return true;
         } catch (\Throwable $e) {
             $this->logger->error('[FastMagento] PLP hydration failed, using native EAV: ' . $e->getMessage());
+            $this->fallbackRecorder->record('hydration exception: ' . $e->getMessage());
             return false;
         }
     }

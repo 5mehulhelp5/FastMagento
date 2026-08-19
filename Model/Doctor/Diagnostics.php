@@ -52,7 +52,8 @@ class Diagnostics
         private readonly \Magento\Store\Model\StoreManagerInterface $storeManager,
         private readonly \Magento\Framework\View\Design\Theme\ThemeProviderInterface $themeProvider,
         private readonly \Magento\Framework\ObjectManager\ConfigLoaderInterface $configLoader,
-        private readonly \Magento\Framework\Filesystem $filesystem
+        private readonly \Magento\Framework\Filesystem $filesystem,
+        private readonly \ParkkTech\FastMagento\Model\Plp\FallbackRecorder $plpFallbackRecorder
     ) {
     }
 
@@ -430,8 +431,10 @@ class Diagnostics
                     'Facet attributes',
                     'None configured and none auto-detected',
                     'No product attribute is flagged "Use in Search Results Layered Navigation". '
-                    . 'Set that flag on the attributes you want as facets (Stores > Attributes > '
-                    . 'Product > [attribute] > Storefront Properties), then run: '
+                    . 'Run: bin/magento fastmagento:doctor --fix (or bin/magento setup:upgrade) to '
+                    . 'auto-enable it for every attribute already filterable in category layered '
+                    . 'navigation — or set the flag manually (Stores > Attributes > Product > '
+                    . '[attribute] > Storefront Properties). Then reindex: '
                     . 'bin/magento indexer:reindex catalogsearch_fulltext'
                 );
         } else {
@@ -514,6 +517,30 @@ class Diagnostics
         }
 
         $out[] = $this->checkUserDefinedAttributeCache();
+
+        // A fallback is silent by design (the page still renders — through the EAV query storm),
+        // so the hydrator records every occurrence and this is where it becomes visible. Measured:
+        // ~27 SELECTs hydrated vs ~286 fallen back on the same 12-product page.
+        $fallbacks = $this->plpFallbackRecorder->read();
+        if ($fallbacks !== null) {
+            $ageHours = (time() - $fallbacks['last_at']) / 3600;
+            $detail = sprintf(
+                '%d recorded (last %s ago): %s',
+                $fallbacks['count'],
+                $ageHours < 1 ? 'under an hour' : sprintf('%.0f hour(s)', $ageHours),
+                $fallbacks['last_reason']
+            );
+            $fix = 'Listings silently rendered through the native EAV path (hundreds of MySQL '
+                . 'queries per page) instead of OpenSearch. Fix the recorded reason — typically: '
+                . 'bin/magento indexer:reindex fastmagento_product, and make sure Magento cron '
+                . 'runs so the index stops drifting. Then browse a category page and run '
+                . 'fastmagento:doctor --fix to clear this record.';
+            $out[] = $ageHours <= 48
+                ? Check::fail(self::G_PLP, 'Listing fallbacks', $detail, $fix)
+                : Check::warn(self::G_PLP, 'Listing fallbacks', $detail . ' — none in the last 48h', $fix);
+        } else {
+            $out[] = Check::ok(self::G_PLP, 'Listing fallbacks', 'none recorded — every listing served from OpenSearch');
+        }
 
         return $out;
     }
