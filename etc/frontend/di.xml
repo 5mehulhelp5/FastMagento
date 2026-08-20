@@ -321,4 +321,14 @@
                 type="ParkkTech\FastMagento\Plugin\SpecialPriceBulkResolverPlugin"
                 sortOrder="10"/>
     </type>
+    <!-- Review count from the indexed reviews_count instead of a COUNT over review tables. -->
+    <type name="Magento\Review\Block\Product\Review">
+        <plugin name="fastmagento_review_collection_size"
+                type="ParkkTech\FastMagento\Plugin\Review\ReviewCollectionSizePlugin" sortOrder="10"/>
+    </type>
+    <!-- Load the review form's rating set once per request, not once per caller. -->
+    <type name="Magento\Review\Block\Form">
+        <plugin name="fastmagento_ratings_memo"
+                type="ParkkTech\FastMagento\Plugin\Review\RatingsMemoPlugin" sortOrder="10"/>
+    </type>
 </config>
