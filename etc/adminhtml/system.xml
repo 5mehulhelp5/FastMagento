@@ -63,6 +63,17 @@
                     <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
                     <comment><![CDATA[<strong>Default Yes.</strong> Failsafe by design: a listing is served from the index only when <em>every</em> product on the page is present there — any miss, or an OpenSearch error, falls that page back to the normal EAV load, so you never get a partial listing. Set to <strong>No</strong> to force the native path. Requires <em>fastmagento_product</em> to be indexed.]]></comment>
                 </field>
+                <field id="serve_page_ids" translate="label comment" type="select" sortOrder="20" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Serve Page Product IDs From The Index</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment><![CDATA[By the time a listing renders, the search engine has already decided which products are on the page and in what order, and Magento has written that answer into the collection's query. With this on, FastMagento reads it from there instead of running the query to re-derive it. It is strictly guarded: it only applies when the query provably does nothing but restrict to a known id list in a known order, and it falls back to the query for anything it cannot reproduce exactly &mdash; sorting by price or name, layered-navigation price and stock filters, customer-group pricing. Turn it off if a listing ever shows the wrong order.]]></comment>
+                </field>
+                <field id="page_id_parity_check" translate="label comment" type="select" sortOrder="30" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Page ID Parity Check (Diagnostic)</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <depends><field id="serve_page_ids">1</field></depends>
+                    <comment><![CDATA[Computes the page ids both ways on every listing and logs any disagreement to system.log, always serving the database's answer when they differ. <strong>Leave this off in production</strong> &mdash; it runs the exact query the setting above exists to avoid, so it costs more than it saves. Use it to prove parity across your own sort orders and filters after enabling the setting, then switch it back off.]]></comment>
+                </field>
             </group>
 
             <!-- Instant Search + Relevance -->
