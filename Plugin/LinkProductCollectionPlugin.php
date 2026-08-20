@@ -92,9 +92,7 @@ class LinkProductCollectionPlugin
                 // not a miss, so the collection is simply empty — returning $proceed() here is what
                 // used to make every no-related-products PDP pay for a native EAV collection load
                 // just to discover there was nothing to load.
-                (function () {
-                    $this->_setIsLoaded(true);
-                })->call($subject);
+                $this->markLoaded($subject, 0);
 
                 return $subject;
             }
@@ -124,9 +122,7 @@ class LinkProductCollectionPlugin
             foreach ($shells as $shell) {
                 $subject->addItem($shell);
             }
-            (function () {
-                $this->_setIsLoaded(true);
-            })->call($subject);
+            $this->markLoaded($subject, count($shells));
 
             return $subject;
         } catch (\Throwable $e) {
@@ -199,6 +195,26 @@ class LinkProductCollectionPlugin
      *
      * @return int[]
      */
+    /**
+     * Mark the collection loaded AND tell it how many rows it has.
+     *
+     * Setting _totalRecords is not bookkeeping — it is the difference between one query and none.
+     * AbstractDb::getSize() runs a COUNT whenever _totalRecords is null, and the related/up-sell
+     * templates call getSize() to decide whether to render the block at all. So short-circuiting
+     * load() alone still left a COUNT(DISTINCT e.entity_id) per block on every product page, and
+     * it fired hardest in the empty case: a product with no related items skipped the load and
+     * then counted the database to confirm there was nothing to show.
+     *
+     * Both values are protected on the collection, hence the bound closure.
+     */
+    private function markLoaded(Collection $subject, int $total): void
+    {
+        (function () use ($total) {
+            $this->_setIsLoaded(true);
+            $this->_totalRecords = $total;
+        })->call($subject);
+    }
+
     /**
      * Linked product ids in position order, or NULL when this plugin cannot answer and the
      * native load must run.
