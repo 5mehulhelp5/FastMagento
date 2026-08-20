@@ -110,6 +110,10 @@
                      doing it in the flushing process costs an operator a moment instead of costing
                      a customer a slow page. Set to 0 when scripting many flushes back to back. -->
                 <warm_after_flush>1</warm_after_flush>
+                <!-- Comma-separated paths to request after a flush. Empty = each store's home
+                     page. A category page is the highest-value entry after home: the EAV and
+                     block caches it builds are the ones every other category page reuses. -->
+                <warm_paths/>
             </cache>
             <efficiency>
                 <!-- Extension-efficiency monitor. Scheduled scan is OFF by default: the scan

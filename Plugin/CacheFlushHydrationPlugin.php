@@ -5,13 +5,10 @@ declare(strict_types=1);
 namespace ParkkTech\FastMagento\Plugin;
 
 use Magento\Framework\App\Cache\Manager;
-use Magento\Framework\App\State;
 use Magento\Framework\App\Config\ScopeConfigInterface;
 use ParkkTech\FastMagento\Helper\WriteLog;
-use Magento\Eav\Model\Config as EavConfig;
-use Magento\Store\Model\App\Emulation;
 use Magento\Store\Model\StoreManagerInterface;
-use ParkkTech\FastMagento\Model\OptionDictionary;
+use Magento\Framework\UrlInterface;
 
 /**
  * Re-prime FastMagento's caches immediately after a cache flush, instead of on a shopper's request.
@@ -38,16 +35,19 @@ use ParkkTech\FastMagento\Model\OptionDictionary;
 class CacheFlushHydrationPlugin
 {
     private const XML_PATH_WARM_AFTER_FLUSH = 'fastmagento/cache/warm_after_flush';
+    private const XML_PATH_WARM_PATHS = 'fastmagento/cache/warm_paths';
+
+    /** Hard ceiling so a long warm_paths list can never turn a flush into a crawl. */
+    private const MAX_WARM_URLS = 10;
+    private const CONNECT_TIMEOUT = 5;
+    private const REQUEST_TIMEOUT = 30;
+    private const USER_AGENT = 'FastMagento-CacheWarmer';
 
     /** Guards against re-entry when a single command flushes several cache-type groups. */
     private bool $done = false;
 
     public function __construct(
         private readonly ScopeConfigInterface $scopeConfig,
-        private readonly OptionDictionary $optionDictionary,
-        private readonly EavConfig $eavConfig,
-        private readonly Emulation $emulation,
-        private readonly State $appState,
         private readonly StoreManagerInterface $storeManager,
         private readonly WriteLog $writeLog
     ) {
@@ -89,66 +89,96 @@ class CacheFlushHydrationPlugin
         }
 
         try {
-            // Prime INSIDE frontend emulation, once per store view.
-            //
-            // This is the whole trick. Priming from the CLI area writes cache entries the
-            // storefront never looks up — measured, a bare CLI hydrate left 9 files in var/cache
-            // where a single real page request produced 199, and the first shopper still paid for
-            // all 71 EAV queries. Magento keys this cache by area and store scope, so the warm-up
-            // only counts if it happens under the same area and store the storefront will run in.
-            // The CLI process has no area code at all, and store emulation needs one before it
-            // will start ("Area code is not set"). emulateAreaCode() supplies it for the duration
-            // of the callback without permanently changing the process.
-            $this->appState->emulateAreaCode(\Magento\Framework\App\Area::AREA_FRONTEND, function () {
-                foreach ($this->storeManager->getStores() as $store) {
-                    $storeId = (int) $store->getId();
-                    $this->emulation->startEnvironmentEmulation(
-                        $storeId,
-                        \Magento\Framework\App\Area::AREA_FRONTEND,
-                        true
-                    );
-                    try {
-                        $this->primeStore();
-                    } finally {
-                        $this->emulation->stopEnvironmentEmulation();
-                    }
-                }
-            });
+            foreach ($this->warmUrls() as $url) {
+                $this->fetch($url);
+            }
         } catch (\Throwable $e) {
-            // A flush must always succeed, even with OpenSearch down.
-            $this->writeLog->writeErrorLog(
-                '[FastMagento] post-flush cache hydration skipped: ' . $e->getMessage()
-            );
+            // A flush must always succeed, even with the storefront down.
+            $this->writeLog->writeErrorLog('[FastMagento] post-flush warm-up skipped: ' . $e->getMessage());
         }
     }
 
     /**
-     * The actual warm-up, run once per store view inside frontend emulation.
+     * The URLs to request, per store view.
+     *
+     * Default is each store's own base URL. `fastmagento/cache/warm_paths` takes a comma-separated
+     * list of paths (e.g. "/,women/tops-women.html") when a store wants a representative category
+     * and product page warmed too — the caches a category page builds are largely the ones every
+     * other category page then reuses.
+     *
+     * @return string[]
      */
-    private function primeStore(): void
+    private function warmUrls(): array
     {
-        try {
-            // 1. EAV attribute metadata — by far the biggest post-flush cost. A cache-cold
-            //    category page spent 71 of its queries re-reading eav_attribute and friends;
-            //    warm, the same page spends 3. Magento\Eav\Model\Config caches the whole
-            //    per-entity attribute set on first access, so touching it once here is what
-            //    moves those queries off the first shopper request.
-            foreach ([\Magento\Catalog\Model\Product::ENTITY, \Magento\Catalog\Model\Category::ENTITY] as $entityType) {
-                $this->eavConfig->getEntityAttributes($entityType);
-            }
+        $urls = [];
+        $paths = array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) $this->scopeConfig->getValue(self::XML_PATH_WARM_PATHS))
+        )));
 
-            // 2. FastMagento's own option dictionary.
-            if (!$this->optionDictionary->isEnabled()) {
-                return;
+        foreach ($this->storeManager->getStores() as $store) {
+            if (!$store->getIsActive()) {
+                continue;
             }
-            $ids = $this->optionDictionary->getAttributeIdsByCode();
-            foreach ($ids as $attributeId) {
-                $this->optionDictionary->getOptions((int) $attributeId);
+            $base = rtrim((string) $store->getBaseUrl(UrlInterface::URL_TYPE_LINK), '/');
+            if ($base === '') {
+                continue;
             }
-        } catch (\Throwable $e) {
-            // A flush must always succeed, even with OpenSearch down.
+            if (!$paths) {
+                $urls[] = $base . '/';
+                continue;
+            }
+            foreach ($paths as $path) {
+                $urls[] = $base . '/' . ltrim($path, '/');
+            }
+        }
+
+        return array_slice(array_unique($urls), 0, self::MAX_WARM_URLS);
+    }
+
+    /**
+     * One warm-up request.
+     *
+     * Deliberately crude: the response is thrown away, because the point is the side effect —
+     * the storefront process rebuilding its own caches, in its own area and store scope, which is
+     * the only context whose cache entries it will actually read back. That is why this is an HTTP
+     * request and not an in-process prime: priming from the CLI writes entries the storefront
+     * never looks up (measured: a CLI hydrate left 18 files in var/cache where one real request
+     * wrote 199, and the first shopper still paid every EAV query).
+     *
+     * Failure is never fatal and never retried — a warm-up is an optimisation, and a flush that
+     * fails because the storefront was briefly unreachable would be a far worse bug than a cold
+     * cache.
+     */
+    private function fetch(string $url): void
+    {
+        $ch = curl_init($url);
+        if ($ch === false) {
+            return;
+        }
+
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_NOBODY => false,          // a HEAD would skip the block rendering we want
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_MAXREDIRS => 3,
+            CURLOPT_CONNECTTIMEOUT => self::CONNECT_TIMEOUT,
+            CURLOPT_TIMEOUT => self::REQUEST_TIMEOUT,
+            CURLOPT_SSL_VERIFYPEER => false,  // local/staging certs are routinely self-signed
+            CURLOPT_SSL_VERIFYHOST => 0,
+            CURLOPT_USERAGENT => self::USER_AGENT,
+            // Bypass the full-page cache so the request actually rebuilds the block/EAV/config
+            // caches instead of being served a stored page and warming nothing.
+            CURLOPT_HTTPHEADER => ['Cache-Control: no-cache', 'Pragma: no-cache'],
+        ]);
+
+        $ok = curl_exec($ch);
+        $err = $ok === false ? curl_error($ch) : '';
+        curl_close($ch);
+
+        if ($err !== '') {
             $this->writeLog->writeErrorLog(
-                '[FastMagento] post-flush cache hydration skipped: ' . $e->getMessage()
+                '[FastMagento] warm-up request failed for ' . $url . ': ' . $err
             );
         }
     }
