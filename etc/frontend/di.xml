@@ -307,4 +307,11 @@
     <virtualType name="Magento\CatalogSearch\Model\ResourceModel\Fulltext\SearchCollection"
                  type="ParkkTech\FastMagento\Model\ResourceModel\Fulltext\Collection"/>
 
+    <!-- Bundle up-sell: answer "is this product inside any bundle?" from the indexed
+         fm_bundle_parents field instead of catalog_product_bundle_selection. -->
+    <type name="Magento\Bundle\Model\ResourceModel\Selection">
+        <plugin name="fastmagento_bundle_selection_parent_ids"
+                type="ParkkTech\FastMagento\Plugin\Bundle\SelectionParentIdsPlugin"
+                sortOrder="10"/>
+    </type>
 </config>

@@ -104,6 +104,13 @@
                 <enabled>1</enabled>
                 <page_size>50</page_size>
             </attribute_pagination>
+            <cache>
+                <!-- Re-prime FastMagento's option dictionary right after a cache flush rather than
+                     on the next shopper request. Default ON: the rebuild happens either way, and
+                     doing it in the flushing process costs an operator a moment instead of costing
+                     a customer a slow page. Set to 0 when scripting many flushes back to back. -->
+                <warm_after_flush>1</warm_after_flush>
+            </cache>
             <efficiency>
                 <!-- Extension-efficiency monitor. Scheduled scan is OFF by default: the scan
                      briefly enables db_logger to attribute SQL to modules, so a store opts in

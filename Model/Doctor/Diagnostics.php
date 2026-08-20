@@ -35,6 +35,7 @@ class Diagnostics
     private const G_THEME = 'Theme';
     private const G_CHECKOUT = 'Checkout';
     private const G_PLP = 'Listing';
+    private const G_LOCK = 'Locking';
     private const G_PHP = 'PHP';
 
     public function __construct(
@@ -53,7 +54,8 @@ class Diagnostics
         private readonly \Magento\Framework\View\Design\Theme\ThemeProviderInterface $themeProvider,
         private readonly \Magento\Framework\ObjectManager\ConfigLoaderInterface $configLoader,
         private readonly \Magento\Framework\Filesystem $filesystem,
-        private readonly \ParkkTech\FastMagento\Model\Plp\FallbackRecorder $plpFallbackRecorder
+        private readonly \ParkkTech\FastMagento\Model\Plp\FallbackRecorder $plpFallbackRecorder,
+        private readonly \Magento\Framework\App\DeploymentConfig $deploymentConfig
     ) {
     }
 
@@ -113,6 +115,7 @@ class Diagnostics
         $checks = array_merge($checks, $this->checkPlp());
         $checks = array_merge($checks, $this->checkTheme());
         $checks = array_merge($checks, $this->checkCheckout());
+        $checks = array_merge($checks, $this->checkLocking());
         $checks = array_merge($checks, $this->checkPhp());
 
         return $checks;
@@ -773,6 +776,74 @@ class Diagnostics
     /**
      * @return Check[]
      */
+    /**
+     * Magento's cache-lock provider.
+     *
+     * WHY THIS IS A FASTMAGENTO CONCERN
+     * ---------------------------------
+     * The default provider is `db`, which implements every lock as a MySQL round-trip pair —
+     * SELECT GET_LOCK(...) then SELECT RELEASE_LOCK(...). Magento takes one lock per cache entry
+     * it populates, so the cost lands entirely on cache-cold page loads: measured on a stock
+     * 2.4.9 + Luma sample-data store, a cold category page spent 56 of its 179 queries (31%) on
+     * lock traffic and a cold product page 14 of 78 (18%).
+     *
+     * That matters here because FastMagento's whole purpose is removing catalogue queries from
+     * those same page loads. A store that has moved its listing to OpenSearch and still runs the
+     * db lock provider is paying more in lock round-trips than in product reads — the remaining
+     * DB time is not the catalogue any more, and a profiler session that does not know this reads
+     * as "FastMagento didn't help".
+     *
+     * Locks are not taken when the cache is warm, so this never shows up in steady-state numbers.
+     * It is purely a cold-start and cache-flush cost, which is exactly when a store is measuring.
+     */
+    private function checkLocking(): array
+    {
+        $out = [];
+
+        try {
+            $provider = (string) ($this->deploymentConfig->get('lock/provider') ?: 'db');
+        } catch (\Throwable $e) {
+            return [Check::skip(self::G_LOCK, 'Lock provider', 'could not read app/etc/env.php: ' . $e->getMessage())];
+        }
+
+        if ($provider === 'db') {
+            $out[] = Check::warn(
+                self::G_LOCK,
+                'Cache lock provider',
+                'db — every cache lock costs a GET_LOCK + RELEASE_LOCK round-trip (~31% of the '
+                . 'queries on a cache-cold category page)',
+                'Switch to the file provider, which takes no SQL at all: '
+                . 'bin/magento setup:config:set --lock-provider=file '
+                . '--lock-file-path=<magento-root>/var/locks (then bin/magento cache:flush). '
+                . 'Use redis/zookeeper instead if this store runs more than one web node — '
+                . 'file locks are local to one filesystem.'
+            );
+
+            return $out;
+        }
+
+        $detail = $provider;
+        if ($provider === 'file') {
+            $path = (string) ($this->deploymentConfig->get('lock/config/path') ?: '');
+            $detail = $path !== '' ? "file ({$path})" : 'file';
+            if ($path !== '' && !is_writable($path)) {
+                $out[] = Check::fail(
+                    self::G_LOCK,
+                    'Cache lock provider',
+                    "file, but {$path} is not writable — locking will fail",
+                    'Create it and make it writable by the web user: '
+                    . "mkdir -p {$path} && chmod 2775 {$path}"
+                );
+
+                return $out;
+            }
+        }
+
+        $out[] = Check::ok(self::G_LOCK, 'Cache lock provider', $detail . ' — no SQL round-trips for locking');
+
+        return $out;
+    }
+
     private function checkPhp(): array
     {
         $out = [];

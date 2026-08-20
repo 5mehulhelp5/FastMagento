@@ -92,4 +92,11 @@
                 sortOrder="10"/>
     </type>
 
+    <!-- Re-prime FastMagento caches in the process that flushed them, so the first storefront
+         request after a deploy or an admin cache flush does not pay the rebuild. -->
+    <type name="Magento\Framework\App\Cache\Manager">
+        <plugin name="fastmagento_cache_flush_hydration"
+                type="ParkkTech\FastMagento\Plugin\CacheFlushHydrationPlugin"
+                sortOrder="100"/>
+    </type>
 </config>
