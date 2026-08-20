@@ -314,4 +314,11 @@
                 type="ParkkTech\FastMagento\Plugin\Bundle\SelectionParentIdsPlugin"
                 sortOrder="10"/>
     </type>
+    <!-- Listing special-price badges: compute from the indexed price/final_price instead of the
+         bulk price-index query. -->
+    <type name="Magento\Catalog\Pricing\Price\SpecialPriceBulkResolverInterface">
+        <plugin name="fastmagento_special_price_bulk"
+                type="ParkkTech\FastMagento\Plugin\SpecialPriceBulkResolverPlugin"
+                sortOrder="10"/>
+    </type>
 </config>
