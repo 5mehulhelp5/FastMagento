@@ -26,6 +26,13 @@
                      a reindex reports "Limit of total fields ... exceeded", then reindex. -->
                 <os_total_fields_limit>5000</os_total_fields_limit>
             </indexing>
+            <serving>
+                <!-- Serve the product page's stock badge from the indexed is_in_stock instead of
+                     querying cataloginventory_stock_status. Default ON. Display only: order
+                     placement re-checks stock by SKU, so a briefly stale index can show a stale
+                     badge but cannot let an oversell through. -->
+                <serve_stock_status>1</serve_stock_status>
+            </serving>
             <plp>
                 <!--
                     Serve the category/search product LISTING from OpenSearch instead of EAV.

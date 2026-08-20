@@ -55,6 +55,15 @@
                 </field>
             </group>
 
+            <group id="serving" translate="label" sortOrder="14" showInDefault="1" showInWebsite="1" showInStore="1">
+                <label>Serving</label>
+                <field id="serve_stock_status" translate="label comment" type="select" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Serve Stock Status From The Index</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment><![CDATA[Take the product page's in-stock badge from the indexed document rather than querying <code>cataloginventory_stock_status</code> for it. <strong>Display only &mdash; this cannot cause an oversell:</strong> order placement still re-checks stock by SKU against the database, so an index that is briefly behind can show a stale badge but cannot let through an order the database would reject. Applies only to products served from the index; anything else uses the normal stock registry.]]></comment>
+                </field>
+            </group>
+
             <group id="plp" translate="label" sortOrder="15" showInDefault="1" showInWebsite="1" showInStore="1">
                 <label>Product Listing (PLP)</label>
                 <comment><![CDATA[Category and search <strong>listing pages</strong>. With a search engine configured, Magento already gets the product ids, ordering, pagination and layered-navigation counts from OpenSearch — what still costs hundreds of queries is turning those ids into products through EAV. Turning this on replaces that last step only; blocks, templates, toolbar and layered navigation are untouched.]]></comment>
