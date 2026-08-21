@@ -331,4 +331,19 @@
         <plugin name="fastmagento_ratings_memo"
                 type="ParkkTech\FastMagento\Plugin\Review\RatingsMemoPlugin" sortOrder="10"/>
     </type>
+    <!-- MSRP apply-to list via the cached EAV config instead of four attribute-load queries. -->
+    <type name="Magento\Msrp\Model\Msrp">
+        <plugin name="fastmagento_msrp_can_apply"
+                type="ParkkTech\FastMagento\Plugin\Msrp\CanApplyToProductPlugin" sortOrder="10"/>
+    </type>
+    <!-- Captcha attempt count: once per request, not once per protected form. -->
+    <type name="Magento\Captcha\Model\ResourceModel\Log">
+        <plugin name="fastmagento_captcha_attempts_memo"
+                type="ParkkTech\FastMagento\Plugin\Captcha\RemoteAttemptsMemoPlugin" sortOrder="10"/>
+    </type>
+    <!-- Category membership from the served document's category_ids. -->
+    <type name="Magento\Catalog\Model\Product">
+        <plugin name="fastmagento_can_be_show_in_category"
+                type="ParkkTech\FastMagento\Plugin\CanBeShowInCategoryPlugin" sortOrder="10"/>
+    </type>
 </config>
