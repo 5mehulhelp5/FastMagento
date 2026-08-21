@@ -62,6 +62,11 @@
                     <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
                     <comment><![CDATA[Take the product page's in-stock badge from the indexed document rather than querying <code>cataloginventory_stock_status</code> for it. <strong>Display only &mdash; this cannot cause an oversell:</strong> order placement still re-checks stock by SKU against the database, so an index that is briefly behind can show a stale badge but cannot let through an order the database would reject. Applies only to products served from the index; anything else uses the normal stock registry.]]></comment>
                 </field>
+                <field id="serve_category_tree" translate="label comment" type="select" sortOrder="20" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Serve Category Tree From The Index</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment><![CDATA[Answer "which categories are under this one?" from the indexed category tree rather than querying <code>catalog_category_entity</code>. The tree is already loaded once per request to render menus and breadcrumbs, so these become in-memory reads. Falls back to the database for any category that is not in the index, or if the index is unavailable.]]></comment>
+                </field>
             </group>
 
             <group id="plp" translate="label" sortOrder="15" showInDefault="1" showInWebsite="1" showInStore="1">

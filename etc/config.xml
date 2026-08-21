@@ -32,6 +32,12 @@
                      placement re-checks stock by SKU, so a briefly stale index can show a stale
                      badge but cannot let an oversell through. -->
                 <serve_stock_status>1</serve_stock_status>
+                <!-- Answer category child/descendant lookups from the indexed category tree
+                     instead of catalog_category_entity. Default ON. The tree is loaded once per
+                     request by CategoryDataProvider, so these become in-memory reads. Falls back
+                     to the database whenever the category is not indexed or the tree is
+                     unavailable. -->
+                <serve_category_tree>1</serve_category_tree>
             </serving>
             <plp>
                 <!--
