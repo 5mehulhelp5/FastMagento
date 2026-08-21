@@ -44,7 +44,12 @@
                 <field id="instant_purge_categories" translate="label comment" type="select" sortOrder="60" showInDefault="1" showInWebsite="1" showInStore="1">
                     <label>Also Purge Category Pages</label>
                     <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
-                    <depends><field id="instant_product_update">1</field></depends>
+                    <depends><field id="instant_product_update">1</field>
+                <field id="instant_category_update" translate="label comment" type="select" sortOrder="35" showInDefault="1" showInWebsite="0" showInStore="0">
+                    <label>Instant Category Update</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment><![CDATA[When a category is saved in the admin, reproject it into OpenSearch straight away instead of waiting for the scheduled indexer. <strong>Leave this on if category attributes are served from the index</strong> &mdash; the page's own name, description, meta tags and layout come from the document, so an edit that waited for cron would look to the merchant like it had not saved. Its ancestors are refreshed too (their menus show this category), and on a move or rename the whole subtree is. API writes, imports and CLI still use the scheduled indexer, so a bulk category import cannot fan out into one reprojection per row.]]></comment>
+                </field></depends>
                     <comment>When Instant Product Update purges the cache, also purge the pages of the categories the product belongs to (so category listings reflect the edit, not just the product page). Default Yes.</comment>
                 </field>
 

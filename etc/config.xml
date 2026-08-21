@@ -18,6 +18,13 @@
                 <!-- When instant update purges the cache, also purge the product's category pages
                      (not just its own page). Default ON. -->
                 <instant_purge_categories>1</instant_purge_categories>
+                <!-- Category equivalent of instant_product_update. Default ON, and it matters more
+                     than it looks: with category attributes served from the index, the page's own
+                     name, description, meta tags and layout come from the document, so an admin
+                     edit that waited for cron would read as "my change didn't save". Scoped in
+                     the observer to a manual admin category save or tree move; API, import and
+                     CLI writes still go through the scheduled indexer. -->
+                <instant_category_update>1</instant_category_update>
                 <!-- Max mapped fields per FastMagento OpenSearch index, applied at index-CREATE
                      time (see Model\OpenSearch\IndexSettings). The product index maps attributes
                      under a dynamic object, so an attribute-heavy catalog blows past OpenSearch's

@@ -308,6 +308,32 @@ class CategoryIndexer implements ActionInterface, MviewActionInterface
      * @param array<int, array{id:string, body:array}> $docs
      * @throws LocalizedException
      */
+    /**
+     * Make everything written so far immediately searchable.
+     *
+     * OpenSearch writes are durable at once but only become visible to SEARCH at the next refresh
+     * — one second by default. CategoryDataProvider reads the tree with a search, so without this
+     * the FIRST storefront request after an admin category save still renders the previous
+     * document while a realtime GET on the same id already returns the new one. Measured exactly
+     * that: request one stale, request two correct.
+     *
+     * Called only from the instant single-category path, never from a full reindex, where forcing
+     * a refresh per batch would work against the bulk write.
+     */
+    public function refreshIndex(): void
+    {
+        try {
+            $this->getSearchClient()->getOpenSearchClient()->indices()->refresh(
+                ['index' => $this->getIndexName()]
+            );
+        } catch (\Throwable $e) {
+            // A missed refresh only costs a second of staleness; never surface it.
+            $this->writeLog->writeErrorLog(
+                '[FastMagento] category index refresh failed: ' . $e->getMessage()
+            );
+        }
+    }
+
     private function bulkIndexNDJSON($client, string $indexName, array $docs): void
     {
         if (!$docs) {

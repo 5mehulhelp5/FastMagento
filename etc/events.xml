@@ -31,4 +31,11 @@
         <observer name="fastmagento_remove_on_product_delete"
                   instance="ParkkTech\FastMagento\Observer\RemoveOnProductDelete"/>
     </event>
+    <!-- Once a category save COMMITS, reproject it (and its ancestors, and its subtree on a move
+         or rename) into OpenSearch and purge the pages that depended on it. Commit-after, not
+         save-after, so a rolled-back save never leaves the index ahead of the database. -->
+    <event name="catalog_category_save_commit_after">
+        <observer name="fastmagento_instant_category_update"
+                  instance="ParkkTech\FastMagento\Observer\InstantCategoryUpdateOnSave"/>
+    </event>
 </config>
