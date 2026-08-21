@@ -41,6 +41,31 @@ class CategoryIndexer implements ActionInterface, MviewActionInterface
         'all_children',
     ];
 
+    /**
+     * Every OTHER category attribute the storefront reads while rendering a category page.
+     *
+     * Derived by instrumenting Category::getData() across category renders rather than by reading
+     * the schema: this is the set the storefront actually asks for, which is what a hydrated
+     * category has to be able to answer without going to the database. Design and layout
+     * attributes are in here deliberately -- they are usually empty, and it is precisely a
+     * category where they are NOT empty that would render wrongly if they were left out.
+     */
+    private const STOREFRONT_ATTRIBUTES = [
+        'description',
+        'meta_title', 'meta_keywords', 'meta_description',
+        'image',
+        'page_layout', 'custom_layout_update', 'custom_layout_update_file',
+        'custom_design', 'custom_design_from', 'custom_design_to', 'custom_apply_to_products',
+        'custom_use_parent_settings',
+        'available_sort_by', 'default_sort_by',
+        'filter_price_range',
+        'landing_page',
+        // Complete the set: with these two, STOREFRONT_ATTRIBUTES + ATTRIBUTES covers EVERY
+        // non-static category attribute in a stock install, which is what lets the read handler
+        // be answered from the index rather than merely supplemented by it.
+        'children', 'path_in_store',
+    ];
+
     public function __construct(
         private readonly ClientResolver $clientResolver,
         private readonly EngineResolverInterface $engineResolver,
@@ -105,7 +130,7 @@ class CategoryIndexer implements ActionInterface, MviewActionInterface
 
             $collection = $this->categoryCollectionFactory->create();
             $collection->setStoreId($storeId);
-            $collection->addAttributeToSelect(self::ATTRIBUTES);
+            $collection->addAttributeToSelect(array_merge(self::ATTRIBUTES, self::STOREFRONT_ATTRIBUTES));
             if (!empty($ids)) {
                 $collection->addFieldToFilter('entity_id', ['in' => array_map('intval', $ids)]);
             }
@@ -136,6 +161,28 @@ class CategoryIndexer implements ActionInterface, MviewActionInterface
      * @param array<int, string> $requestPaths
      * @return array<string, mixed>
      */
+
+    /**
+     * The storefront attribute values for one category, as a flat map.
+     *
+     * Values are taken with getData() rather than typed getters so what lands in the index is the
+     * raw attribute value the model itself would hand back — the hydrator's job is to reproduce
+     * the loaded model exactly, and a cast here would be a difference it could not undo.
+     *
+     * @param mixed $category
+     * @return array<string, mixed>
+     */
+    private function buildStorefrontAttrs($category): array
+    {
+        $attrs = [];
+        foreach (self::STOREFRONT_ATTRIBUTES as $code) {
+            $value = $category->getData($code);
+            $attrs[$code] = $value === '' ? null : $value;
+        }
+
+        return $attrs;
+    }
+
     private function buildDoc($category, int $storeId, array $requestPaths): array
     {
         $entityId = (int) $category->getId();
@@ -161,6 +208,13 @@ class CategoryIndexer implements ActionInterface, MviewActionInterface
             'all_children' => (string) ($category->getData('all_children') ?? ''),
             'request_path' => $requestPaths[$entityId] ?? '',
             'store_id' => $storeId,
+            'attribute_set_id' => (int) $category->getAttributeSetId(),
+            // The remaining storefront attributes, kept under one dynamic object so adding an
+            // attribute to STOREFRONT_ATTRIBUTES needs no mapping change. Null is recorded as
+            // null rather than dropped: "this category has no custom_design" and "we did not
+            // index custom_design" have to stay distinguishable, because the hydrator refuses
+            // to build a category from a document that cannot answer for every attribute.
+            'fm_attrs' => $this->buildStorefrontAttrs($category),
         ];
     }
 
@@ -323,6 +377,9 @@ class CategoryIndexer implements ActionInterface, MviewActionInterface
                     'all_children' => ['type' => 'keyword'],
                     'request_path' => ['type' => 'keyword'],
                     'store_id' => ['type' => 'integer'],
+                    'attribute_set_id' => ['type' => 'integer'],
+                    // Not indexed for search — read back from _source only.
+                    'fm_attrs' => ['type' => 'object', 'enabled' => false],
                 ],
             ],
         ]);

@@ -346,4 +346,10 @@
         <plugin name="fastmagento_can_be_show_in_category"
                 type="ParkkTech\FastMagento\Plugin\CanBeShowInCategoryPlugin" sortOrder="10"/>
     </type>
+    <!-- Category EAV attribute values from the index instead of the per-backend-type UNION.
+         Scoped to categories inside the plugin; products and other EAV entities are untouched. -->
+    <type name="Magento\Eav\Model\ResourceModel\ReadHandler">
+        <plugin name="fastmagento_category_read_handler"
+                type="ParkkTech\FastMagento\Plugin\Eav\CategoryReadHandlerPlugin" sortOrder="10"/>
+    </type>
 </config>

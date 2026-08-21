@@ -38,6 +38,11 @@
                      to the database whenever the category is not indexed or the tree is
                      unavailable. -->
                 <serve_category_tree>1</serve_category_tree>
+                <!-- Fill a category's EAV attribute values from the index instead of the
+                     per-backend-type UNION. Default ON. All-or-nothing: a document that cannot
+                     answer for every attribute the handler would return falls through to the
+                     query. -->
+                <serve_category_attributes>1</serve_category_attributes>
             </serving>
             <plp>
                 <!--
