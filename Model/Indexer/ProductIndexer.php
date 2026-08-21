@@ -1007,6 +1007,34 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
      * @return void
      * @throws LocalizedException
      */
+    /**
+     * Make everything written so far immediately searchable.
+     *
+     * OpenSearch writes are durable at once but only become visible to SEARCH at the next refresh
+     * — one second by default. Most FastMagento product reads are realtime GET/mget
+     * (OpenSearchPdpFetcher), so a product page and a category listing already show an admin edit
+     * on the very next request without this. The SEARCH paths do not: InstantSearch and the search
+     * results collection both query, so after an instant update they kept returning the previous
+     * document — measured directly, a realtime GET returned the new short_description while a
+     * search on the same id still returned the old one, or no hit at all.
+     *
+     * Called only from the instant single-product path, never from a full reindex, where forcing a
+     * refresh per batch would work against the bulk write.
+     */
+    public function refreshIndex(): void
+    {
+        try {
+            $this->getSearchClient()->getOpenSearchClient()->indices()->refresh(
+                ['index' => $this->getIndexName()]
+            );
+        } catch (\Throwable $e) {
+            // A missed refresh only costs a second of search staleness; never surface it.
+            $this->writeLog->writeErrorLog(
+                '[FastMagento] product index refresh failed: ' . $e->getMessage()
+            );
+        }
+    }
+
     private function bulkIndexNDJSON($client, string $indexName, array $docs): void
     {
         if (!$docs) {

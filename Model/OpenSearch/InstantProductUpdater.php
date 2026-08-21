@@ -76,6 +76,9 @@ class InstantProductUpdater
     {
         $ids = array_values(array_unique(array_merge([$productId], $this->getParentIds([$productId]))));
         $this->productIndexer->executeList($ids);
+        // Make the write searchable now rather than at the next refresh interval. The PDP and
+        // listing paths read with realtime GET/mget and would not need this; the search paths do.
+        $this->productIndexer->refreshIndex();
     }
 
     /**
