@@ -92,4 +92,27 @@
                 sortOrder="10"/>
     </type>
 
+    <!-- Re-prime FastMagento caches in the process that flushed them, so the first storefront
+         request after a deploy or an admin cache flush does not pay the rebuild. -->
+    <type name="Magento\Framework\App\Cache\Manager">
+        <plugin name="fastmagento_cache_flush_hydration"
+                type="ParkkTech\FastMagento\Plugin\CacheFlushHydrationPlugin"
+                sortOrder="100"/>
+    </type>
+    <!-- Cart existence check via OpenSearch.
+         core's removeItemsWithAbsentProducts() builds a product collection through the PROTECTED
+         _productCollectionFactory and calls getAllIds() only to spot deleted products. A virtual
+         type keeps the factory's class (so the constructor type hint is satisfied) while changing
+         which collection it builds, so core's control flow is untouched and only the lookup moves. -->
+    <virtualType name="ParkkTech\FastMagento\Model\ResourceModel\Quote\Item\AbsentCheckProductCollectionFactory"
+                 type="Magento\Catalog\Model\ResourceModel\Product\CollectionFactory">
+        <arguments>
+            <argument name="instanceName" xsi:type="string">ParkkTech\FastMagento\Model\ResourceModel\Quote\Item\AbsentCheckProductCollection</argument>
+        </arguments>
+    </virtualType>
+    <type name="ParkkTech\FastMagento\Model\ResourceModel\Quote\Item\Collection">
+        <arguments>
+            <argument name="productCollectionFactory" xsi:type="object">ParkkTech\FastMagento\Model\ResourceModel\Quote\Item\AbsentCheckProductCollectionFactory</argument>
+        </arguments>
+    </type>
 </config>

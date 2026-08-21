@@ -447,6 +447,8 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
                     'childLinks'   => $this->batchChildLinks($batchIds),
                     'catLinkCount' => $this->batchCategoryLinkCounts($batchIds),
                     'reviews'      => $this->batchReviewSummary($batchIds, $storeId),
+                    'links'        => $this->batchProductLinks($batchIds),
+                    'bundleParents'=> $this->batchBundleParents($batchIds),
                 ];
                 foreach ($collection as $product) {
                     try {
@@ -632,6 +634,119 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
      * @param int[] $productIds
      * @return array<int, int[]>
      */
+
+    /** Empty link graph, used when a product has no links at all. */
+    private const EMPTY_LINKS = ['related' => [], 'upsell' => [], 'crosssell' => []];
+
+    /** Magento link_type_id => the key used on the indexed document. */
+    private const LINK_TYPES = [
+        \Magento\Catalog\Model\Product\Link::LINK_TYPE_RELATED => 'related',
+        \Magento\Catalog\Model\Product\Link::LINK_TYPE_UPSELL => 'upsell',
+        \Magento\Catalog\Model\Product\Link::LINK_TYPE_CROSSSELL => 'crosssell',
+    ];
+
+    /**
+     * Related / up-sell / cross-sell ids for a whole chunk in ONE query, in merchant position
+     * order (the order the storefront blocks render them in).
+     *
+     * Position lives in catalog_product_link_attribute_int, addressed through the per-link-type
+     * attribute row in catalog_product_link_attribute, so the ordering join is the same shape the
+     * native link collection uses. Products with no links are simply absent from the map and fall
+     * back to self::EMPTY_LINKS.
+     *
+     * @param int[] $productIds
+     * @return array<int, array{related: int[], upsell: int[], crosssell: int[]}>
+     */
+
+    /**
+     * Bundle parent ids per product for a chunk, in one query.
+     *
+     * Mirrors Magento\Bundle\Model\ResourceModel\Selection::getParentIdsByChild — joining the
+     * entity table so the ids returned are entity_ids, matching what the observer expects.
+     *
+     * @param int[] $productIds
+     * @return array<int, int[]>
+     */
+    private function batchBundleParents(array $productIds): array
+    {
+        if (!$productIds) {
+            return [];
+        }
+
+        $connection = $this->productCollectionFactory->create()->getConnection();
+        $select = $connection->select()
+            ->distinct(true)
+            ->from(['s' => $connection->getTableName('catalog_product_bundle_selection')], ['product_id'])
+            ->join(
+                ['e' => $connection->getTableName('catalog_product_entity')],
+                'e.entity_id = s.parent_product_id',
+                ['parent_product_id' => 'e.entity_id']
+            )
+            ->where('s.product_id IN (?)', $productIds);
+
+        $map = [];
+        foreach ($connection->fetchAll($select) as $row) {
+            $map[(int) $row['product_id']][] = (int) $row['parent_product_id'];
+        }
+
+        return $map;
+    }
+
+    private function batchProductLinks(array $productIds): array
+    {
+        if (!$productIds) {
+            return [];
+        }
+
+        $connection = $this->productCollectionFactory->create()->getConnection();
+        $select = $connection->select()
+            ->from(
+                ['l' => $connection->getTableName('catalog_product_link')],
+                ['product_id', 'linked_product_id', 'link_type_id', 'link_id']
+            )
+            ->joinLeft(
+                ['la' => $connection->getTableName('catalog_product_link_attribute')],
+                'la.link_type_id = l.link_type_id AND la.product_link_attribute_code = '
+                    . $connection->quote('position'),
+                []
+            )
+            ->joinLeft(
+                ['ai' => $connection->getTableName('catalog_product_link_attribute_int')],
+                'ai.product_link_attribute_id = la.product_link_attribute_id AND ai.link_id = l.link_id',
+                ['position' => 'ai.value']
+            )
+            ->where('l.product_id IN (?)', $productIds)
+            ->where('l.link_type_id IN (?)', array_keys(self::LINK_TYPES))
+            ->order('position ' . \Magento\Framework\DB\Select::SQL_ASC)
+            ->order('l.link_id ' . \Magento\Framework\DB\Select::SQL_ASC);
+
+        $map = [];
+        foreach ($connection->fetchAll($select) as $row) {
+            $key = self::LINK_TYPES[(int) $row['link_type_id']] ?? null;
+            if ($key === null) {
+                continue;
+            }
+            $parent = (int) $row['product_id'];
+            if (!isset($map[$parent])) {
+                $map[$parent] = self::EMPTY_LINKS;
+            }
+            $map[$parent][$key][] = (int) $row['linked_product_id'];
+        }
+
+        return $map;
+    }
+
+    /**
+     * Single-product form of batchProductLinks(), for the canonical (composite-type) index path
+     * where no batch context exists.
+     *
+     * @return array{related: int[], upsell: int[], crosssell: int[]}
+     */
+    private function getProductLinks(int $productId): array
+    {
+        return $this->batchProductLinks([$productId])[$productId] ?? self::EMPTY_LINKS;
+    }
+
     private function batchParentIds(array $productIds): array
     {
         if (!$productIds) {
@@ -892,6 +1007,34 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
      * @return void
      * @throws LocalizedException
      */
+    /**
+     * Make everything written so far immediately searchable.
+     *
+     * OpenSearch writes are durable at once but only become visible to SEARCH at the next refresh
+     * — one second by default. Most FastMagento product reads are realtime GET/mget
+     * (OpenSearchPdpFetcher), so a product page and a category listing already show an admin edit
+     * on the very next request without this. The SEARCH paths do not: InstantSearch and the search
+     * results collection both query, so after an instant update they kept returning the previous
+     * document — measured directly, a realtime GET returned the new short_description while a
+     * search on the same id still returned the old one, or no hit at all.
+     *
+     * Called only from the instant single-product path, never from a full reindex, where forcing a
+     * refresh per batch would work against the bulk write.
+     */
+    public function refreshIndex(): void
+    {
+        try {
+            $this->getSearchClient()->getOpenSearchClient()->indices()->refresh(
+                ['index' => $this->getIndexName()]
+            );
+        } catch (\Throwable $e) {
+            // A missed refresh only costs a second of search staleness; never surface it.
+            $this->writeLog->writeErrorLog(
+                '[FastMagento] product index refresh failed: ' . $e->getMessage()
+            );
+        }
+    }
+
     private function bulkIndexNDJSON($client, string $indexName, array $docs): void
     {
         if (!$docs) {
@@ -1015,7 +1158,23 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
                     ],
                     'parent_ids' => [
                         'type' => 'integer'
-                    ]
+                    ],
+                    // Related / up-sell / cross-sell id lists, in merchant position order.
+                    // Mapped explicitly because the index is `dynamic: false`; the read path only
+                    // ever reads them back out of _source, never queries them, so `index: false`
+                    // keeps them out of the inverted index while still being returned by mget.
+                    'fm_links' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'related' => ['type' => 'integer', 'index' => false],
+                            'upsell' => ['type' => 'integer', 'index' => false],
+                            'crosssell' => ['type' => 'integer', 'index' => false],
+                        ]
+                    ],
+                    // Bundle parents of this product (catalog_product_bundle_selection).
+                    // Magento_Bundle's up-sell observer asks for these on EVERY product page,
+                    // including the overwhelming majority that belong to no bundle at all.
+                    'fm_bundle_parents' => ['type' => 'integer', 'index' => false]
                 ]
             ]
         ]);
@@ -1083,6 +1242,21 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
         $productData['request_path'] = $this->batchCtx !== null
             ? ($this->batchCtx['requestPaths'][$pid] ?? null)
             : $this->getProductRequestPath($pid);
+        // Related / up-sell / cross-sell id lists, resolved at INDEX time.
+        // The link graph lives only in catalog_product_link, so LinkProductCollectionPlugin used
+        // to read it from MySQL on every product page even when the linked products themselves
+        // were served from OpenSearch — three catalogue queries per PDP that survived the whole
+        // serving layer. Projecting the graph onto the parent document lets the read path take
+        // the ids straight off the doc it has already fetched. Falls back to the DB when absent,
+        // so an index written before this field existed keeps working until the next reindex.
+        $productData['fm_links'] = $this->batchCtx !== null
+            ? ($this->batchCtx['links'][$pid] ?? self::EMPTY_LINKS)
+            : $this->getProductLinks($pid);
+        // Bundle parents, same rationale as fm_links: an empty list is itself the useful answer,
+        // because it lets the read path skip the query instead of running it to learn "none".
+        $productData['fm_bundle_parents'] = $this->batchCtx !== null
+            ? ($this->batchCtx['bundleParents'][$pid] ?? [])
+            : $this->batchBundleParents([$pid])[$pid] ?? [];
 
         if ($this->batchCtx !== null) {
             // Deterministic stock: reproduce every field the per-product getById path gets from

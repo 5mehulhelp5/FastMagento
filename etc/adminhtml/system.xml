@@ -44,7 +44,12 @@
                 <field id="instant_purge_categories" translate="label comment" type="select" sortOrder="60" showInDefault="1" showInWebsite="1" showInStore="1">
                     <label>Also Purge Category Pages</label>
                     <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
-                    <depends><field id="instant_product_update">1</field></depends>
+                    <depends><field id="instant_product_update">1</field>
+                <field id="instant_category_update" translate="label comment" type="select" sortOrder="35" showInDefault="1" showInWebsite="0" showInStore="0">
+                    <label>Instant Category Update</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment><![CDATA[When a category is saved in the admin, reproject it into OpenSearch straight away instead of waiting for the scheduled indexer. <strong>Leave this on if category attributes are served from the index</strong> &mdash; the page's own name, description, meta tags and layout come from the document, so an edit that waited for cron would look to the merchant like it had not saved. Its ancestors are refreshed too (their menus show this category), and on a move or rename the whole subtree is. API writes, imports and CLI still use the scheduled indexer, so a bulk category import cannot fan out into one reprojection per row.]]></comment>
+                </field></depends>
                     <comment>When Instant Product Update purges the cache, also purge the pages of the categories the product belongs to (so category listings reflect the edit, not just the product page). Default Yes.</comment>
                 </field>
 
@@ -55,6 +60,25 @@
                 </field>
             </group>
 
+            <group id="serving" translate="label" sortOrder="14" showInDefault="1" showInWebsite="1" showInStore="1">
+                <label>Serving</label>
+                <field id="serve_stock_status" translate="label comment" type="select" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Serve Stock Status From The Index</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment><![CDATA[Take the product page's in-stock badge from the indexed document rather than querying <code>cataloginventory_stock_status</code> for it. <strong>Display only &mdash; this cannot cause an oversell:</strong> order placement still re-checks stock by SKU against the database, so an index that is briefly behind can show a stale badge but cannot let through an order the database would reject. Applies only to products served from the index; anything else uses the normal stock registry.]]></comment>
+                </field>
+                <field id="serve_category_tree" translate="label comment" type="select" sortOrder="20" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Serve Category Tree From The Index</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment><![CDATA[Answer "which categories are under this one?" from the indexed category tree rather than querying <code>catalog_category_entity</code>. The tree is already loaded once per request to render menus and breadcrumbs, so these become in-memory reads. Falls back to the database for any category that is not in the index, or if the index is unavailable.]]></comment>
+                </field>
+                <field id="serve_category_attributes" translate="label comment" type="select" sortOrder="30" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Serve Category Attributes From The Index</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment><![CDATA[Fill a category's attribute values from the indexed document instead of running the UNION across <code>catalog_category_entity_varchar/int/text/decimal/datetime</code>. The category itself is still loaded by Magento &mdash; only the attribute fetch changes source &mdash; so layout handles, design settings and custom layout updates all still resolve through the normal path. All-or-nothing: a document that cannot answer for every attribute falls back to the query.]]></comment>
+                </field>
+            </group>
+
             <group id="plp" translate="label" sortOrder="15" showInDefault="1" showInWebsite="1" showInStore="1">
                 <label>Product Listing (PLP)</label>
                 <comment><![CDATA[Category and search <strong>listing pages</strong>. With a search engine configured, Magento already gets the product ids, ordering, pagination and layered-navigation counts from OpenSearch — what still costs hundreds of queries is turning those ids into products through EAV. Turning this on replaces that last step only; blocks, templates, toolbar and layered navigation are untouched.]]></comment>
@@ -62,6 +86,17 @@
                     <label>Serve Listing From OpenSearch</label>
                     <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
                     <comment><![CDATA[<strong>Default Yes.</strong> Failsafe by design: a listing is served from the index only when <em>every</em> product on the page is present there — any miss, or an OpenSearch error, falls that page back to the normal EAV load, so you never get a partial listing. Set to <strong>No</strong> to force the native path. Requires <em>fastmagento_product</em> to be indexed.]]></comment>
+                </field>
+                <field id="serve_page_ids" translate="label comment" type="select" sortOrder="20" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Serve Page Product IDs From The Index</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment><![CDATA[By the time a listing renders, the search engine has already decided which products are on the page and in what order, and Magento has written that answer into the collection's query. With this on, FastMagento reads it from there instead of running the query to re-derive it. It is strictly guarded: it only applies when the query provably does nothing but restrict to a known id list in a known order, and it falls back to the query for anything it cannot reproduce exactly &mdash; sorting by price or name, layered-navigation price and stock filters, customer-group pricing. Turn it off if a listing ever shows the wrong order.]]></comment>
+                </field>
+                <field id="page_id_parity_check" translate="label comment" type="select" sortOrder="30" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Page ID Parity Check (Diagnostic)</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <depends><field id="serve_page_ids">1</field></depends>
+                    <comment><![CDATA[Computes the page ids both ways on every listing and logs any disagreement to system.log, always serving the database's answer when they differ. <strong>Leave this off in production</strong> &mdash; it runs the exact query the setting above exists to avoid, so it costs more than it saves. Use it to prove parity across your own sort orders and filters after enabling the setting, then switch it back off.]]></comment>
                 </field>
             </group>
 
@@ -250,6 +285,17 @@
 
                 <field id="popular_searches" translate="label" type="textarea" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="1">
                     <label>Popular Search Terms (Comma-Separated)</label>
+                </field>
+
+                <field id="warm_after_flush" translate="label comment" type="select" sortOrder="20" showInDefault="1" showInWebsite="0" showInStore="0">
+                    <label>Warm Cache After Flush</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment><![CDATA[After a cache flush, request the storefront once so it rebuilds its own caches, instead of handing the rebuild to whichever shopper arrives first. A cache-cold category page costs several times what the same page costs warm, and a flush is normally something an operator did — a deploy, or the Flush Magento Cache button — so the wait belongs to them, not to a customer. Turn this off when scripting many flushes back to back.]]></comment>
+                </field>
+                <field id="warm_paths" translate="label comment" type="textarea" sortOrder="30" showInDefault="1" showInWebsite="0" showInStore="0">
+                    <label>Warm-Up Paths (Comma-Separated)</label>
+                    <depends><field id="warm_after_flush">1</field></depends>
+                    <comment><![CDATA[Paths to request after a flush, e.g. <code>/,women/tops-women.html</code>. Leave empty to warm each store's home page only. <strong>Adding one category page is worth far more than adding ten:</strong> the attribute and block caches a category page builds are the ones every other category page then reuses — warming home alone leaves a category page almost as cold as it was. Capped at 10 URLs so a long list cannot turn a flush into a crawl.]]></comment>
                 </field>
             </group>
 

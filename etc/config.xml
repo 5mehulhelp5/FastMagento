@@ -18,6 +18,13 @@
                 <!-- When instant update purges the cache, also purge the product's category pages
                      (not just its own page). Default ON. -->
                 <instant_purge_categories>1</instant_purge_categories>
+                <!-- Category equivalent of instant_product_update. Default ON, and it matters more
+                     than it looks: with category attributes served from the index, the page's own
+                     name, description, meta tags and layout come from the document, so an admin
+                     edit that waited for cron would read as "my change didn't save". Scoped in
+                     the observer to a manual admin category save or tree move; API, import and
+                     CLI writes still go through the scheduled indexer. -->
+                <instant_category_update>1</instant_category_update>
                 <!-- Max mapped fields per FastMagento OpenSearch index, applied at index-CREATE
                      time (see Model\OpenSearch\IndexSettings). The product index maps attributes
                      under a dynamic object, so an attribute-heavy catalog blows past OpenSearch's
@@ -26,6 +33,24 @@
                      a reindex reports "Limit of total fields ... exceeded", then reindex. -->
                 <os_total_fields_limit>5000</os_total_fields_limit>
             </indexing>
+            <serving>
+                <!-- Serve the product page's stock badge from the indexed is_in_stock instead of
+                     querying cataloginventory_stock_status. Default ON. Display only: order
+                     placement re-checks stock by SKU, so a briefly stale index can show a stale
+                     badge but cannot let an oversell through. -->
+                <serve_stock_status>1</serve_stock_status>
+                <!-- Answer category child/descendant lookups from the indexed category tree
+                     instead of catalog_category_entity. Default ON. The tree is loaded once per
+                     request by CategoryDataProvider, so these become in-memory reads. Falls back
+                     to the database whenever the category is not indexed or the tree is
+                     unavailable. -->
+                <serve_category_tree>1</serve_category_tree>
+                <!-- Fill a category's EAV attribute values from the index instead of the
+                     per-backend-type UNION. Default ON. All-or-nothing: a document that cannot
+                     answer for every attribute the handler would return falls through to the
+                     query. -->
+                <serve_category_attributes>1</serve_category_attributes>
+            </serving>
             <plp>
                 <!--
                     Serve the category/search product LISTING from OpenSearch instead of EAV.
@@ -38,6 +63,18 @@
                     which path is live.
                 -->
                 <serve_listing>1</serve_listing>
+                <!-- Take the page's product ids from the search engine's own answer, already
+                     present in the collection's SELECT, instead of running that SELECT against
+                     MySQL purely to re-derive it. Default ON. Strictly guarded: it only applies
+                     when the select provably does nothing but restrict to a known id list in a
+                     known order, and falls back to the query for any sort or filter it cannot
+                     reproduce (price sorting, layered-nav price/stock filters, ...). -->
+                <serve_page_ids>1</serve_page_ids>
+                <!-- Diagnostic. Computes the ids BOTH ways and logs any disagreement, serving the
+                     SQL answer when they differ. Off by default because it performs the very
+                     query the setting above exists to avoid. Turn it on to validate a store's
+                     own sorts and filters, then turn it back off. -->
+                <page_id_parity_check>0</page_id_parity_check>
             </plp>
             <search>
                 <!-- Attribute facets on the instant search results page (comma-separated codes).
@@ -104,6 +141,17 @@
                 <enabled>1</enabled>
                 <page_size>50</page_size>
             </attribute_pagination>
+            <cache>
+                <!-- Re-prime FastMagento's option dictionary right after a cache flush rather than
+                     on the next shopper request. Default ON: the rebuild happens either way, and
+                     doing it in the flushing process costs an operator a moment instead of costing
+                     a customer a slow page. Set to 0 when scripting many flushes back to back. -->
+                <warm_after_flush>1</warm_after_flush>
+                <!-- Comma-separated paths to request after a flush. Empty = each store's home
+                     page. A category page is the highest-value entry after home: the EAV and
+                     block caches it builds are the ones every other category page reuses. -->
+                <warm_paths/>
+            </cache>
             <efficiency>
                 <!-- Extension-efficiency monitor. Scheduled scan is OFF by default: the scan
                      briefly enables db_logger to attribute SQL to modules, so a store opts in

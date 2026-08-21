@@ -7,6 +7,7 @@ use Magento\CatalogInventory\Api\StockConfigurationInterface;
 use Magento\CatalogInventory\Api\StockItemRepositoryInterface;
 use Magento\CatalogInventory\Api\Data\StockItemInterface;
 use Magento\CatalogInventory\Api\Data\StockStatusInterface;
+use Magento\CatalogInventory\Api\Data\StockStatusInterfaceFactory;
 use Magento\CatalogInventory\Api\Data\StockInterface;
 use Magento\CatalogInventory\Api\StockItemCriteriaInterfaceFactory;
 use Magento\CatalogInventory\Model\Spi\StockRegistryProviderInterface;
@@ -22,6 +23,9 @@ use Magento\GroupedProduct\Model\Product\Type\Grouped;
 
 class OpenSearchStockRegistry implements StockRegistryInterface
 {
+    /** @var StockStatusInterfaceFactory */
+    private $stockStatusFactory;
+
 
     private StoreManagerInterface $storeManager;
     private StockConfigurationInterface $stockConfiguration;
@@ -47,7 +51,8 @@ class OpenSearchStockRegistry implements StockRegistryInterface
         ProductFactory $productFactory,
         ScopeConfigInterface $scopeConfig,
         Registry $registry,
-        ProductType $productType
+        ProductType $productType,
+        StockStatusInterfaceFactory $stockStatusFactory
     ) {
         $this->storeManager = $storeManager;
         $this->stockConfiguration = $stockConfiguration;
@@ -57,6 +62,7 @@ class OpenSearchStockRegistry implements StockRegistryInterface
         $this->productFactory = $productFactory;
         $this->registry = $registry;
         $this->productType = $productType;
+        $this->stockStatusFactory = $stockStatusFactory;
     }
 
 
@@ -265,12 +271,62 @@ class OpenSearchStockRegistry implements StockRegistryInterface
     /**
      * Build Stock Status from Registry Data.
      */
+    /**
+     * Quantity as the indexed document records it.
+     *
+     * The projection does not write a top-level `qty`; it writes stock_data.qty and
+     * quantity_and_stock_status.qty (the shapes core itself uses). Reading only `qty` therefore
+     * silently yielded 0, which is not a harmless default here -- the storefront's
+     * "Only N left" message is threshold-driven, so a real stock of 100 reported as 0 changes
+     * what the page says.
+     */
+    private function resolveIndexedQty($product): float
+    {
+        $direct = $product->getData('qty');
+        if ($direct !== null && $direct !== '') {
+            return (float) $direct;
+        }
+
+        foreach (['stock_data', 'quantity_and_stock_status'] as $key) {
+            $data = $product->getData($key);
+            if (is_array($data) && isset($data['qty']) && $data['qty'] !== '') {
+                return (float) $data['qty'];
+            }
+        }
+
+        return 0.0;
+    }
+
     private function buildStockStatusFromRegistry($product): StockStatusInterface
     {
+        $isInStock = $product->getData('is_in_stock');
+
+        // Build the object outright when the document can answer.
+        //
+        // This used to call the stock registry provider and then immediately overwrite the status
+        // it came back with -- so the cataloginventory_stock_status query it issued was paid for
+        // and then discarded. On a product page served from the index that was the last catalogue
+        // query left standing, and it was fetching a number we were about to throw away.
+        //
+        // Display only: this drives the in-stock badge and the "only N left" message. It does not
+        // authorise a sale -- order placement re-checks stock by SKU against the database -- so a
+        // briefly stale index can show a stale badge but cannot let an oversell through.
+        if ($isInStock !== null) {
+            /** @var StockStatusInterface $stockStatus */
+            $stockStatus = $this->stockStatusFactory->create();
+            $stockStatus->setProductId((int) $product->getId());
+            $stockStatus->setStockStatus((int) ((bool) $isInStock));
+            $stockStatus->setQty($this->resolveIndexedQty($product));
+
+            return $stockStatus;
+        }
+
+        // Document predates the field (or carries no stock at all): let the registry answer, which
+        // is the pre-existing behaviour including its query.
         /** @var StockStatusInterface $stockStatus */
         $stockStatus = $this->stockRegistryProvider->getStockStatus($product->getId(), null);
+        $stockStatus->setStockStatus(false);
 
-        $stockStatus->setStockStatus($product->getData('is_in_stock') ?? false);
         return $stockStatus;
     }
 

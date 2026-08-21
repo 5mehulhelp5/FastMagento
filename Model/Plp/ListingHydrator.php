@@ -39,6 +39,15 @@ use Psr\Log\LoggerInterface;
  */
 class ListingHydrator
 {
+    private const XML_PATH_SERVE_PAGE_IDS = 'fastmagento/plp/serve_page_ids';
+    private const XML_PATH_PAGE_ID_PARITY = 'fastmagento/plp/page_id_parity_check';
+
+    /** Set while deriving ids when the select carried Magento's out-of-stock filter. */
+    private bool $sawStockPredicate = false;
+
+    /** Whether hydrate() still owes that filter, applied from the indexed documents. */
+    private bool $mustFilterInStock = false;
+
     public const XML_PATH_ENABLED = 'fastmagento/plp/serve_listing';
 
     public function __construct(
@@ -94,6 +103,30 @@ class ListingHydrator
                 return false;
             }
 
+            // Out-of-stock filter, owed from the id derivation.
+            //
+            // When the ids came from the select instead of from MySQL, Magento's
+            // `stock_status_index.stock_status = 1` predicate was skipped rather than evaluated —
+            // so apply it here, from the same documents we just fetched. Doing it after the
+            // all-or-nothing check above matters: a product missing from the INDEX is an index
+            // problem and must still fall back, whereas a product the index says is out of stock
+            // is a real answer and simply does not belong on the page.
+            if ($this->mustFilterInStock) {
+                $inStock = [];
+                foreach ($ids as $id) {
+                    $doc = $docs[$id] ?? null;
+                    if ($doc !== null && !empty($doc['is_in_stock'])) {
+                        $inStock[] = $id;
+                    }
+                }
+                if (!$inStock) {
+                    // Everything on this page is out of stock. Let the native path build the
+                    // empty collection so "no products" messaging behaves normally.
+                    return false;
+                }
+                $ids = $inStock;
+            }
+
             $storeId = (int) $this->storeManager->getStore()->getId();
             $products = [];
             foreach ($ids as $id) {
@@ -147,6 +180,45 @@ class ListingHydrator
      */
     private function resolvePageIds(ProductCollection $collection): array
     {
+        $derived = null;
+        if ($this->scopeConfig->isSetFlag(self::XML_PATH_SERVE_PAGE_IDS, ScopeInterface::SCOPE_STORE)) {
+            $derived = $this->derivePageIdsWithoutSql($collection);
+        }
+
+        // Parity mode: run BOTH and log any disagreement. Off by default — it deliberately
+        // performs the very query the derivation exists to avoid, so it is a diagnostic for
+        // validating a store's sorts and filters, not something to leave on.
+        if ($derived !== null && $this->scopeConfig->isSetFlag(self::XML_PATH_PAGE_ID_PARITY, ScopeInterface::SCOPE_STORE)) {
+            $sqlIds = $this->fetchPageIdsViaSql($collection);
+            if ($sqlIds !== $derived) {
+                $this->logger->warning(sprintf(
+                    '[FastMagento] page-id parity MISMATCH. sql=[%s] derived=[%s]. '
+                    . 'Serving the SQL ids. Disable fastmagento/plp/serve_page_ids if this repeats.',
+                    implode(',', $sqlIds),
+                    implode(',', $derived)
+                ));
+
+                return $sqlIds;
+            }
+            $this->logger->info('[FastMagento] page-id parity OK (' . count($derived) . ' ids)');
+        }
+
+        if ($derived !== null) {
+            $this->mustFilterInStock = $this->sawStockPredicate;
+
+            return $derived;
+        }
+
+        $this->mustFilterInStock = false;   // the SQL applied the stock filter itself
+
+        return $this->fetchPageIdsViaSql($collection);
+    }
+
+    /**
+     * The original SQL path: clone the collection's select and ask MySQL which ids are on the page.
+     */
+    private function fetchPageIdsViaSql(ProductCollection $collection): array
+    {
         $select = clone $collection->getSelect();
         $select->reset(Select::COLUMNS);
         $select->columns(['entity_id' => 'e.entity_id']);
@@ -157,5 +229,149 @@ class ListingHydrator
         }
 
         return $ids;
+    }
+
+    /**
+     * Derive the page's ids from the Select WITHOUT executing it — or return null if we cannot.
+     *
+     * WHY THIS IS POSSIBLE AT ALL
+     * ---------------------------
+     * By the time the collection loads, Magento has already asked the search engine for this page
+     * and applied the answer to the select: the matching ids as `e.entity_id IN (...)`, and, when
+     * the engine decided the ORDER (relevance, position), an `ORDER BY FIELD(e.entity_id, ...)`
+     * that spells that order out literally. Both are data sitting in the Select object. Running the
+     * query re-derives an answer the select is already carrying.
+     *
+     * WHEN WE MUST NOT
+     * ----------------
+     * Returns null — meaning "run the SQL" — whenever anything in the select could change WHICH
+     * ids survive or in WHAT order, and we cannot reproduce it in PHP:
+     *
+     *   - any ORDER BY that is not the engine's FIELD() list (sort by price, name, or any joined
+     *     column is resolved by MySQL against data we are not looking at here);
+     *   - any WHERE beyond the id list (a layered-nav price filter, a stock filter, a
+     *     customer-group price-index condition — each can EXCLUDE ids the engine returned);
+     *   - GROUP/HAVING/DISTINCT, or a join we do not recognise.
+     *
+     * Getting this wrong is silent: products in the wrong order, or a filtered-out product
+     * appearing on the page. So the bar for deriving is "the select provably does nothing but
+     * restrict to a known id list in a known order", and everything else falls back.
+     */
+    private function derivePageIdsWithoutSql(ProductCollection $collection): ?array
+    {
+        $this->sawStockPredicate = false;
+
+        try {
+            $select = $collection->getSelect();
+
+            if ($select->getPart(Select::GROUP) || $select->getPart(Select::HAVING)) {
+                return null;
+            }
+
+            $ordered = $this->extractEngineOrder($select);
+            $inList = $this->extractIdWhitelist($select);
+            if ($inList === null) {
+                return null;   // a WHERE we cannot account for, or no id list at all
+            }
+
+            if ($ordered === null) {
+                // No FIELD() ordering. Only safe when the select imposes no ordering at all;
+                // otherwise MySQL is sorting by something we are not reading.
+                if ($select->getPart(Select::ORDER)) {
+                    return null;
+                }
+                $ordered = $inList;
+            }
+
+            // The engine order may list more ids than the whitelist (paging is applied by LIMIT
+            // below); intersect, preserving the engine's order.
+            $whitelist = array_flip($inList);
+            $ids = [];
+            foreach ($ordered as $id) {
+                if (isset($whitelist[$id])) {
+                    $ids[] = $id;
+                }
+            }
+            if (!$ids) {
+                return null;
+            }
+
+            $limit = $select->getPart(Select::LIMIT_COUNT);
+            $offset = (int) $select->getPart(Select::LIMIT_OFFSET);
+            if ($limit) {
+                $ids = array_slice($ids, $offset, (int) $limit);
+            } elseif ($offset) {
+                $ids = array_slice($ids, $offset);
+            }
+
+            return $ids ?: null;
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
+     * The engine's explicit ordering, from `ORDER BY FIELD(e.entity_id, 1,2,3)`, or null.
+     *
+     * @return int[]|null
+     */
+    private function extractEngineOrder(Select $select): ?array
+    {
+        $order = $select->getPart(Select::ORDER);
+        if (!$order) {
+            return null;
+        }
+        if (count($order) !== 1) {
+            return null;   // FIELD() plus a tie-breaker column: MySQL decides, not us
+        }
+
+        $expr = is_array($order[0]) ? (string) $order[0][0] : (string) $order[0];
+        if (!preg_match('/FIELD\s*\(\s*[`\w.]*entity_id`?\s*,\s*([0-9,\s]+)\)/i', $expr, $m)) {
+            return null;
+        }
+
+        $ids = array_values(array_filter(array_map('intval', explode(',', $m[1]))));
+
+        return $ids ?: null;
+    }
+
+    /**
+     * The id whitelist from the select's WHERE, but ONLY when every WHERE clause is an
+     * `entity_id IN (...)` restriction. Any other predicate means MySQL is filtering on something
+     * we are not evaluating, so we refuse.
+     *
+     * @return int[]|null
+     */
+    private function extractIdWhitelist(Select $select): ?array
+    {
+        $wheres = $select->getPart(Select::WHERE);
+        if (!$wheres) {
+            return null;
+        }
+
+        $ids = null;
+        foreach ($wheres as $where) {
+            $clause = (string) $where;
+            // The one predicate we are willing to account for ourselves. Magento adds
+            // `stock_status_index.stock_status = 1` to hide out-of-stock products; every indexed
+            // document already carries is_in_stock, so this is a filter we can apply from the
+            // documents we are about to fetch anyway rather than a reason to run the query.
+            // Recorded here and applied in hydrate() AFTER the docs come back.
+            if (preg_match('/^\\s*(AND\\s+)?\\(?\\s*[`\\w.]*stock_status`?\\s*=\\s*.?1.?\\s*\\)?\\s*$/i', $clause)) {
+                $this->sawStockPredicate = true;
+                continue;
+            }
+
+            if (!preg_match('/^\s*(?:AND\s+)?\(?\s*[`\w.]*entity_id`?\s+IN\s*\(([0-9,\s\x27]+)\)\s*\)?\s*$/i', $clause, $m)) {
+                return null;
+            }
+            $these = array_values(array_filter(array_map(
+                static fn($v) => (int) trim($v, " '"),
+                explode(',', $m[1])
+            )));
+            $ids = $ids === null ? $these : array_values(array_intersect($ids, $these));
+        }
+
+        return $ids ?: null;
     }
 }
