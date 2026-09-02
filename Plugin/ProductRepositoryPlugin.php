@@ -11,6 +11,7 @@ use Magento\Framework\Exception\NoSuchEntityException;
 use ParkkTech\FastMagento\Helper\ShellProductBuilder;
 use ParkkTech\FastMagento\Helper\OpenSearchPdpFetcher;
 use ParkkTech\FastMagento\Model\Indexer\ProductIndexer;
+use Magento\Catalog\Model\ResourceModel\Product as ProductResource;
 
 /**
  * A plugin that intercepts ProductRepository calls and converts
@@ -33,7 +34,8 @@ class ProductRepositoryPlugin
         private readonly WriteLog $writeLog,
         private readonly ShellProductBuilder $shellProductBuilder,
         private readonly OpenSearchPdpFetcher $openSearchPdpFetcher,
-        private readonly ProductIndexer $productIndexer
+        private readonly ProductIndexer $productIndexer,
+        private readonly ProductResource $productResource
     ) {
     }
 
@@ -95,14 +97,16 @@ class ProductRepositoryPlugin
             return $proceed($sku, $editMode, $storeId, $forceReload);
         }
 
-        // For frontend, try to fetch from OpenSearch by SKU
-        // Fall back to native repository if not found
-        try {
-            $original = $proceed($sku, $editMode, $storeId, $forceReload);
-            return $original;
-        } catch (NoSuchEntityException $e) {
-            throw $e;
+        // The native get() loads a fresh Product via $product->load($id) and ignores
+        // the return value. FrontendProductPlugin::aroundLoad returns a shell built
+        // from the OpenSearch doc WITHOUT hydrating the subject, so the repository
+        // then caches an empty product and dies in prepareSku(null). Resolve the id
+        // and route through getById(), which our aroundGetById serves correctly.
+        $productId = $this->productResource->getIdBySku($sku);
+        if (!$productId) {
+            throw new NoSuchEntityException(__('The product with SKU "%1" does not exist.', $sku));
         }
+        return $subject->getById($productId, $editMode, $storeId, $forceReload);
     }
 
     /**
