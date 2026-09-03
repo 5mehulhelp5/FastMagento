@@ -209,59 +209,36 @@ class OpenSearchStockRegistry implements StockRegistryInterface
             );
         }
 
-        // Simple Products: Use direct stock data
-        if ($product->getTypeId() === $this->productType::TYPE_SIMPLE) {
-            $stockItem->setIsInStock($product->getData('is_in_stock') ?? false);
-            $stockItem->setQty($product->getData('stock_qty') ?? 0);
+        // Every branch below only OVERRIDES the stock item the provider returned when the served
+        // document actually carries the data. Grouped and bundle products used to read
+        // getAssociatedProducts() / getBundleChildren(), which a shell built from the index never
+        // has, so iterating null was a warning in production and a 500 in developer mode -- and
+        // reported every grouped and bundle product as out of stock, so none could be added to
+        // the cart. The document indexes children of all three composite types under
+        // `child_products` (with is_in_stock and stock_qty per child); when it cannot answer, the
+        // provider's database-backed item stands.
+        $typeId = $product->getTypeId();
+        if ($typeId === $this->productType::TYPE_SIMPLE) {
+            if ($product->getData('is_in_stock') !== null) {
+                $stockItem->setIsInStock((bool) $product->getData('is_in_stock'));
+                $stockItem->setQty($product->getData('stock_qty') ?? $stockItem->getQty());
+            }
+            return $stockItem;
         }
 
-        // Configurable Products: Check if any child is in stock
-        elseif ($product->getTypeId() === Configurable::TYPE_CODE) {
-            $childProducts = $product->getChildProducts();
+        if (in_array($typeId, [Configurable::TYPE_CODE, Grouped::TYPE_CODE, ProductType::TYPE_BUNDLE], true)) {
+            $children = $product->getData('child_products');
+            if (!is_array($children) || !$children) {
+                return $stockItem;
+            }
             $isInStock = false;
             $stockQty = 0;
-
-            foreach ($childProducts as $child) {
-                if ($child['is_in_stock']) {
+            foreach ($children as $child) {
+                if (!empty($child['is_in_stock'])) {
                     $isInStock = true;
                 }
-                $stockQty += (int) $child['stock_qty'];
+                $stockQty += (int) ($child['stock_qty'] ?? 0);
             }
-
-            $stockItem->setIsInStock($isInStock);
-            $stockItem->setQty($stockQty);
-        }
-
-        // Grouped Products: Check if any grouped product is in stock
-        elseif ($product->getTypeId() === Grouped::TYPE_CODE) {
-            $associatedProducts = $product->getAssociatedProducts();
-            $isInStock = false;
-            $stockQty = 0;
-
-            foreach ($associatedProducts as $associated) {
-                if ($associated['is_in_stock']) {
-                    $isInStock = true;
-                }
-                $stockQty += (int) $associated['stock_qty'];
-            }
-
-            $stockItem->setIsInStock($isInStock);
-            $stockItem->setQty($stockQty);
-        }
-
-        // Bundle Products: Check if any bundle item is in stock
-        elseif ($product->getTypeId() === ProductType::TYPE_BUNDLE) {
-            $bundleItems = $product->getBundleChildren();
-            $isInStock = false;
-            $stockQty = 0;
-
-            foreach ($bundleItems as $bundleItem) {
-                if ($bundleItem['is_in_stock']) {
-                    $isInStock = true;
-                }
-                $stockQty += (int) $bundleItem['stock_qty'];
-            }
-
             $stockItem->setIsInStock($isInStock);
             $stockItem->setQty($stockQty);
         }
