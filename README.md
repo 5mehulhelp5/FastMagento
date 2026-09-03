@@ -175,23 +175,20 @@ running this serving layer.
 <table>
 <tr>
 <td width="33%" align="center">
-  <img src="docs/img/demo-autocomplete.gif" alt="As-you-type autocomplete search from OpenSearch" width="100%"/>
+  <img src="assets/img/demo-autocomplete.gif" alt="As-you-type autocomplete search from OpenSearch" width="100%"/>
   <br/><strong>⌨️ Autocomplete</strong><br/><sub>Products + categories appear as you type, in milliseconds.</sub>
 </td>
 <td width="33%" align="center">
-  <img src="docs/img/demo-instant-serp.gif" alt="Instant search results page updating live with no reload" width="100%"/>
+  <img src="assets/img/demo-instant-serp.gif" alt="Instant search results page updating live with no reload" width="100%"/>
   <br/><strong>⚡ Instant SERP</strong><br/><sub>The whole results grid re-renders live — zero page reloads.</sub>
 </td>
 <td width="33%" align="center">
-  <img src="docs/img/demo-shop-by.gif" alt="Shop By layered navigation updating in real time" width="100%"/>
+  <img src="assets/img/demo-shop-by.gif" alt="Shop By layered navigation updating in real time" width="100%"/>
   <br/><strong>🎛️ Live "Shop By"</strong><br/><sub>Tick a filter → grid, counts &amp; facets update instantly.</sub>
 </td>
 </tr>
 </table>
 
-<sub>💡 GIF paths: <code>docs/img/demo-autocomplete.gif</code>, <code>docs/img/demo-instant-serp.gif</code>,
-<code>docs/img/demo-shop-by.gif</code>. For crisper, smaller files GitHub also autoplays looping
-muted <code>&lt;video&gt;</code> (MP4/WebM) — swap the <code>&lt;img&gt;</code> tags if preferred.</sub>
 
 > ### 🎸 And here's the kicker
 > **All of this is pure *backend* performance — no Hyvä, no Swissup Breeze, no theme surgery
@@ -207,8 +204,7 @@ muted <code>&lt;video&gt;</code> (MP4/WebM) — swap the <code>&lt;img&gt;</code
 > FastMagento serves **PDPs, search, autocomplete, the category tree/menu and the cart** from
 > OpenSearch. It does **not yet** serve the **product listing on a category page** — that path
 > ships disabled in `view/frontend/layout/catalog_category_view.xml` while the block/template
-> contract is finished (Phase 2 / 2L in
-> [docs/OPENSEARCH-SERVING-LAYER-PLAN.md](docs/OPENSEARCH-SERVING-LAYER-PLAN.md)).
+> contract is finished (Phase 2 / 2L of the serving-layer plan).
 >
 > So a category page still runs Magento's normal EAV listing queries — on a page of configurables
 > that is roughly *7 queries per product* (tier price, catalog rule, media gallery, stock, super
@@ -336,7 +332,7 @@ query reductions but feels less wall-clock benefit (see the note under Benchmark
 |---|---:|---:|
 | Attribute-edit page (50k-option `color`) | **crashes / hangs** | **opens instantly** (paginated, 50/page) |
 
-<p align="center"><img src="docs/img/demo-attribute-manager.gif" alt="Paginated attribute-option manager on a 50,000-option attribute" width="100%"/></p>
+<p align="center"><img src="assets/img/demo-attribute-manager.gif" alt="Paginated attribute-option manager on a 50,000-option attribute" width="100%"/></p>
 
 ---
 
@@ -365,7 +361,7 @@ colour-coded), a per-hot-path **core-vs-extension query "tax"** chart, and a sev
 every extension's total database overhead. Run it on demand, on a schedule (cron), or from the CLI
 (`bin/magento fastmagento:efficiency:scan`). **It works for any extension** — no per-extension config.
 
-<p align="center"><img src="docs/img/demo-efficiency-monitor.png" alt="Extension Efficiency Monitor — N+1 hotspots, load times, and per-extension database overhead" width="100%"/></p>
+<p align="center"><img src="assets/img/demo-efficiency-monitor.png" alt="Extension Efficiency Monitor — N+1 hotspots, load times, and per-extension database overhead" width="100%"/></p>
 
 > The reference numbers below are from a mid-sized (~14.6k-product) catalog; the 500k tables above
 > are the headline "does it hold at scale" proof.
@@ -381,7 +377,7 @@ catalogue with **active catalog price rules across customer groups** and configu
 several hundred variants, with Webkul Marketplace and other third-party modules running on every
 page.
 
-![Cold-render SQL queries — native Magento vs FastMagento](docs/img/benchmark-queries.svg)
+![Cold-render SQL queries — native Magento vs FastMagento](assets/img/benchmark-queries.svg)
 
 ### SQL queries per cold render
 
@@ -710,7 +706,7 @@ no jQuery, no RequireJS, no Alpine, no Knockout. It loads as a plain deferred `<
 from `application/json` islands rendered by the module's own templates, so the same build runs
 unchanged on every theme. (It used to be jQuery bootstrapped through `text/x-magento-init`, which
 only Magento's RequireJS bootstrap executes — on a theme that ships no RequireJS the markup rendered
-and nothing ever read it. See [docs/THEME-COMPATIBILITY.md](docs/THEME-COMPATIBILITY.md).)
+and nothing ever read it.)
 
 Verified end-to-end on the same store, switching only the active theme — listing, product page
 swatch selection, add-to-cart and checkout on each:
@@ -857,14 +853,10 @@ Add a Claude API key under `FastMagento > AI Assistant`, then:
 
 ### Measuring relevance
 
-`docs/tools/search-relevance.php` runs a set of golden queries through the **real** query builder
-and prints the ranked top-N with scores plus pass/fail checks, so ranking changes are measured,
-not guessed:
-
-```bash
-php app/code/ParkkTech/FastMagento/docs/tools/search-relevance.php            # golden-queries.json
-php app/code/ParkkTech/FastMagento/docs/tools/search-relevance.php "front end" "sxs"
-```
+Keep a short list of golden queries for your catalogue (the searches your shoppers actually type,
+with the product you expect first) and re-run them after every synonym, keyword or weighting
+change. `bin/magento fastmagento:doctor` confirms the indexes, facets and instant search are
+wired; the ranking itself is judged against those golden queries, not guessed.
 
 ---
 
@@ -901,13 +893,15 @@ On by default (`FastMagento > … attribute_pagination/enabled`); no configurati
 
 ## 🗺️ Roadmap
 
-Search analytics, merchandising rules and campaign-targeted results, recommendations, and
-**per-shopper curation that knows the vehicle they drive and the size they wear** — planned, not
-built. The plan, the sequencing and the reasoning are in
-[**docs/ROADMAP.md**](docs/ROADMAP.md).
+**Per-shopper personalisation** — profiles built from what a shopper buys, views, searches for and
+filters by, applied to search, listings and recommendation rows, with an exploration slot for
+under-exposed products — now ships as the optional companion package
+[**ParkkTech FastMagento Personalisation**](https://github.com/parkktech/FastMagentoPersonalization)
+(`composer require parkktech/fastmagento-personalization`, requires this package 2.7+). Core stays
+byte-identical without it.
 
-Nothing on that page ships today. If a capability is described in this README it exists; if it is
-only on the roadmap, it does not.
+Still ahead: search analytics, merchandising rules and campaign-targeted results. If a capability
+is described in this README it exists; if it is only listed here as ahead, it does not.
 
 ## Requirements
 
@@ -1158,30 +1152,13 @@ The intended setup flow — *install → add a Claude key → run the mapping to
    Then enable `Search > AI Search Keywords`. For a 14k+ catalog, set a fast model under
    `AI Assistant > Model` (Haiku/Sonnet) — keyword extraction does not need the largest model.
 
-### Measuring search relevance
-
-```bash
-# run the golden queries (docs/tools/golden-queries.json) through the real query builder
-php app/code/ParkkTech/FastMagento/docs/tools/search-relevance.php
-
-# ad-hoc: compare specific queries with scores
-php app/code/ParkkTech/FastMagento/docs/tools/search-relevance.php "front end" "sxs" "skid plate"
-```
-
-Prints the ranked top-N with `_score` and pass/fail checks, so any relevance/synonym change is
-measured before and after — not guessed.
-
----
-
 ## Verifying it works
 
-Confirm pages are served from OpenSearch with minimal SQL using the bundled profiler:
-```bash
-bash app/code/ParkkTech/FastMagento/docs/tools/query-profile.sh enable
-bash app/code/ParkkTech/FastMagento/docs/tools/query-profile.sh /your-product.html
-bash app/code/ParkkTech/FastMagento/docs/tools/query-profile.sh disable
-```
-A PDP/category page should report **0 product/EAV/catalog** queries.
+Confirm pages are served from OpenSearch with minimal SQL by counting the queries one render
+costs: enable MySQL's general log (`SET GLOBAL general_log = 'ON'`), request the page once warm,
+and read the log back. A product page should show **no product/EAV/catalog** queries — every
+product read comes from the index. `bin/magento fastmagento:doctor` reports the serving wiring the
+same way, per surface.
 
 ### OpenSearch quick reference
 ```bash
@@ -1231,16 +1208,6 @@ curl -s "http://localhost:9200/magento2_products/_mapping?pretty"
   group, plus a deliberately over-qty line — after go-live; it also assumes a fresh price/rule
   projection (the always-ready rule sync keeps it current after the first reindex). Turn the
   master toggle off to fall back to a fully native cart.
-
----
-
-## Test tooling
-
-- `docs/tools/search-relevance.php` + `docs/tools/golden-queries.json` — relevance harness: runs
-  golden queries through the real query builder and prints ranked hits with scores + pass/fail.
-- `docs/tools/create-downloadable-test.php` — creates a downloadable product with multiple
-  purchasable links and product-level samples to exercise the full downloadable render path.
-- `docs/tools/query-profile.sh` — DB-query profiler used to verify OpenSearch serving.
 
 ---
 
