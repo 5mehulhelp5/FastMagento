@@ -224,7 +224,7 @@ class ReviewListFromIndexPlugin
         $votes = $this->dataCollectionFactory->create();
         foreach ($src['ratings'] ?? [] as $vote) {
             $votes->addItem($this->dataObjectFactory->create(['data' => [
-                'vote_id' => (int) ($vote['rating_id'] ?? 0),
+                'vote_id' => (int) ($vote['vote_id'] ?? 0),
                 'review_id' => (int) ($src['review_id'] ?? 0),
                 'rating_id' => (int) ($vote['rating_id'] ?? 0),
                 'option_id' => (int) ($vote['option_id'] ?? 0),

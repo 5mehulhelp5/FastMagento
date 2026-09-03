@@ -214,7 +214,7 @@ class ReviewIndexer implements ActionInterface, MviewActionInterface
         $voteSelect = $conn->select()
             ->from(
                 ['v' => $this->resource->getTableName('rating_option_vote')],
-                ['review_id', 'rating_id', 'option_id', 'percent', 'value']
+                ['vote_id', 'review_id', 'rating_id', 'option_id', 'percent', 'value']
             )
             ->join(
                 ['rt' => $this->resource->getTableName('rating')],
@@ -231,6 +231,7 @@ class ReviewIndexer implements ActionInterface, MviewActionInterface
             ->order('v.rating_id ASC');
         foreach ($conn->fetchAll($voteSelect) as $v) {
             $votes[(int) $v['review_id']][] = [
+                'vote_id' => (int) $v['vote_id'],
                 'rating_id' => (int) $v['rating_id'],
                 'option_id' => (int) $v['option_id'],
                 'rating_code' => (string) ($v['store_code'] ?? $v['default_code']),
@@ -415,6 +416,7 @@ class ReviewIndexer implements ActionInterface, MviewActionInterface
                     'ratings' => [
                         'type' => 'object',
                         'properties' => [
+                            'vote_id' => ['type' => 'integer'],
                             'rating_id' => ['type' => 'integer'],
                             'option_id' => ['type' => 'integer'],
                             'rating_code' => ['type' => 'keyword'],
