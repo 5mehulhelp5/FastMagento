@@ -367,4 +367,23 @@
                 sortOrder="100"/>
     </type>
 
+    <!-- Category model, breadcrumb walk and design walk from the category index (storefront). -->
+    <type name="Magento\Catalog\Model\CategoryRepository">
+        <plugin name="fastmagento_category_repository_from_index"
+                type="ParkkTech\FastMagento\Plugin\CategoryRepositoryFromIndexPlugin" sortOrder="5"/>
+    </type>
+    <type name="Magento\Catalog\Model\Category">
+        <plugin name="fastmagento_category_parents_from_index"
+                type="ParkkTech\FastMagento\Plugin\CategoryParentsFromIndexPlugin" sortOrder="5"/>
+    </type>
+    <!-- Filterable-attribute list for the layer from the cache (covers the search subclass). -->
+    <type name="Magento\Catalog\Model\Layer\Category\FilterableAttributeList">
+        <plugin name="fastmagento_filterable_attributes_cache"
+                type="ParkkTech\FastMagento\Plugin\Layer\FilterableAttributeListCachePlugin" sortOrder="10"/>
+    </type>
+    <!-- Swatch definitions from the attribute-option dictionary. -->
+    <type name="Magento\Swatches\Helper\Data">
+        <plugin name="fastmagento_swatches_from_index"
+                type="ParkkTech\FastMagento\Plugin\Swatches\SwatchesFromIndexPlugin" sortOrder="10"/>
+    </type>
 </config>

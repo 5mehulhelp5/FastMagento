@@ -195,6 +195,7 @@ class OptionDictionary
         $tOpt = $this->resource->getTableName('eav_attribute_option');
         $tVal = $this->resource->getTableName('eav_attribute_option_value');
         $tAttr = $this->resource->getTableName('eav_attribute');
+        $swatchByOption = $this->loadSwatches($conn, $storeId);
 
         // one pass: every option of every select/multiselect attribute, default-store label w/ admin fallback
         $select = $conn->select()
@@ -265,6 +266,7 @@ class OptionDictionary
                 'value' => (string) $row['option_id'],
                 'label' => (string) ($row['label'] ?? ''),
                 'sort' => (int) $row['sort_order'],
+                'swatch' => $swatchByOption[(int) $row['option_id']] ?? null,
             ];
         }
         if ($current !== null) {
@@ -293,6 +295,95 @@ class OptionDictionary
     }
 
     /** Low-level OpenSearch client (the same one the product indexer uses). */
+    /**
+     * Swatch row per option for the served store: the store-specific row when it has a value,
+     * otherwise the admin (store 0) row — the same precedence Magento\Swatches\Helper\Data
+     * applies when it reads eav_attribute_option_swatch.
+     *
+     * @return array<int, array{swatch_id:string, option_id:string, store_id:string, type:string, value:string}>
+     */
+    private function loadSwatches($conn, int $storeId): array
+    {
+        $out = [];
+        try {
+            $select = $conn->select()
+                ->from($this->resource->getTableName('eav_attribute_option_swatch'), ['swatch_id', 'option_id', 'store_id', 'type', 'value'])
+                ->where('store_id IN (?)', [0, $storeId])
+                ->order('store_id ASC');   // admin row first, store row overrides
+            foreach ($conn->fetchAll($select) as $row) {
+                $optionId = (int) $row['option_id'];
+                if ((int) $row['store_id'] === $storeId && (string) $row['value'] === '' && isset($out[$optionId])) {
+                    continue;   // empty store-level text falls back to admin, as the helper does
+                }
+                $out[$optionId] = [
+                    'swatch_id' => (string) $row['swatch_id'],
+                    'option_id' => (string) $row['option_id'],
+                    'store_id' => (string) $row['store_id'],
+                    'type' => (string) $row['type'],
+                    'value' => (string) ($row['value'] ?? ''),
+                ];
+            }
+        } catch (\Throwable $e) {
+            $this->logger->warning('[FastMagento] OptionDictionary: swatch load failed: ' . $e->getMessage());
+        }
+        return $out;
+    }
+
+    /** @var array<int, array|null> option_id => swatch row (null = option known, no swatch) */
+    private array $swatchMemo = [];
+
+    /**
+     * Swatch rows for these option ids from the dictionary, keyed by option id and holding
+     * only options that have a swatch — the shape Magento\Swatches\Helper\Data returns.
+     * NULL when any option is unknown to the dictionary (index behind): let the query answer.
+     *
+     * @param int[] $optionIds
+     * @return array<int, array>|null
+     */
+    public function getSwatchesByOptionIds(array $optionIds): ?array
+    {
+        $optionIds = array_values(array_unique(array_filter($optionIds)));
+        if (!$optionIds || !$this->isEnabled()) {
+            return null;
+        }
+        $missing = array_filter($optionIds, fn ($id) => !array_key_exists($id, $this->swatchMemo));
+        if ($missing) {
+            $client = $this->getClient();
+            if (!$client) {
+                return null;
+            }
+            $res = $client->search([
+                'index' => $this->config->getAttributeOptionIndexName(),
+                'body' => [
+                    'size' => 200,
+                    '_source' => ['options'],
+                    'query' => ['terms' => ['options.value.keyword' => array_map('strval', $missing)]],
+                ],
+            ]);
+            $wanted = array_flip(array_map('intval', $missing));
+            foreach ($res['hits']['hits'] ?? [] as $hit) {
+                foreach ($hit['_source']['options'] ?? [] as $option) {
+                    $id = (int) ($option['value'] ?? 0);
+                    if (isset($wanted[$id])) {
+                        $this->swatchMemo[$id] = $option['swatch'] ?? null;
+                    }
+                }
+            }
+            foreach ($missing as $id) {
+                if (!array_key_exists($id, $this->swatchMemo)) {
+                    return null;
+                }
+            }
+        }
+        $out = [];
+        foreach ($optionIds as $id) {
+            if (!empty($this->swatchMemo[$id])) {
+                $out[$id] = $this->swatchMemo[$id];
+            }
+        }
+        return $out;
+    }
+
     private function getClient(): ?object
     {
         if ($this->client !== null) {

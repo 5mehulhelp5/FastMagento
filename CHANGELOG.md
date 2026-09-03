@@ -37,6 +37,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   collection, only the rendering is cached (~30 ms per uncached listing on the demo). Serving >
   *Cache Layered Navigation HTML*, with lifetime and block names configurable.
 
+- **Current category from the index.** The category controller's `CategoryRepository::get()`,
+  the breadcrumb walk (`getParentCategories`) and the design walk (`getParentDesignCategory`)
+  are answered from the indexed category document on the storefront: seven to eight queries
+  per category and search page. Serving > *Serve The Current Category From The Index*.
+- **URL routing from the index.** The URL-rewrite router's request-path lookup is answered
+  from the category tree or one term query on the product index (`request_path` is now a
+  keyword field — reindex `fastmagento_product` once; the doctor says so until then), and
+  the router's follow-up lookup of the resolved system path is answered without a query.
+  Redirects, CMS pages, product-in-category paths and custom rewrites still come from
+  `url_rewrite`. Category URLs for menus/breadcrumbs come from the tree too. Serving >
+  *Resolve Product And Category URLs From The Index*.
+- **Filterable-attribute list cached** per store and list class, rebuilt from the EAV config
+  cache; cleaned on attribute save. Serving > *Cache The Layer's Filterable Attribute List*.
+- **Swatches from the index.** The attribute-option dictionary now carries each option's
+  swatch (type, value, admin/store precedence as the helper applies it) and
+  `Swatches\Helper\Data::getSwatchesByOptionsId` is answered from it. Reindex
+  `fastmagento_attribute_option` once. Serving > *Serve Swatches From The Index*.
+
 ### Fixed
 - **Product documents' `reviews_count` / `rating_summary` went stale.** No mview subscription
   covered the review tables, so a newly approved review did not change the stars on product

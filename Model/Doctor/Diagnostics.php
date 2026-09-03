@@ -239,6 +239,21 @@ class Diagnostics
             'review index' => [$this->openSearchConfig->getReviewIndexName(), $approvedReviews],
         ];
 
+        try {
+            $mapping = $client->indices()->getMapping(['index' => $this->openSearchConfig->getIndexName()]);
+            $props = (array) (reset($mapping)['mappings']['properties'] ?? []);
+            $out[] = ($props['request_path']['type'] ?? null) === 'keyword'
+                ? Check::ok(self::G_INDEX, 'Product URL routing', 'request_path is a keyword field — product URLs resolve from the index')
+                : Check::warn(
+                    self::G_INDEX,
+                    'Product URL routing',
+                    'request_path is not mapped as a keyword on ' . $this->openSearchConfig->getIndexName() . ' — product URLs still resolve in MySQL',
+                    'Run: bin/magento indexer:reindex fastmagento_product (rebuilds the index with the current mapping)'
+                );
+        } catch (\Throwable $e) {
+            // Mapping unreadable: the count checks below will say what is wrong with the index.
+        }
+
         foreach ($indices as $label => [$indexName, $expected]) {
             if (!$indexName) {
                 continue;

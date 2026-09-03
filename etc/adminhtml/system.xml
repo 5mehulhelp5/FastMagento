@@ -116,7 +116,27 @@
                 <field id="cache_layered_nav_blocks" translate="label comment" type="text" sortOrder="72" showInDefault="1" showInWebsite="1" showInStore="1">
                     <label>Layered Navigation Block Names</label>
                     <comment><![CDATA[Comma-separated layout block names. Default <code>catalog.leftnav,catalogsearch.leftnav</code> (Magento, Luma, Breeze and Hyvä).]]></comment>
-                    <depends><field id="cache_layered_nav">1</field></depends>
+                    <depends><field id="cache_layered_nav">1</field>
+                <field id="serve_category_load" translate="label comment" type="select" sortOrder="80" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Serve The Current Category From The Index</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment><![CDATA[Build the category the storefront is rendering (and its breadcrumb and design ancestors) from the indexed category document instead of loading it from <code>catalog_category_entity</code>: removes the entity load, exists-check, breadcrumb and design-settings queries on every category and search page. Storefront only; admin, API and GraphQL keep the database, as does any category the index does not hold.]]></comment>
+                </field>
+                <field id="serve_url_rewrites" translate="label comment" type="select" sortOrder="81" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Resolve Product And Category URLs From The Index</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment><![CDATA[Answer the URL-rewrite router from the category tree and the product index instead of <code>url_rewrite</code>. Only current canonical paths are answered; old paths that redirect, CMS pages, product-in-category paths and custom rewrites still come from the database, so redirects keep working. Product paths need a product index built by this version (the doctor reports if not).]]></comment>
+                </field>
+                <field id="cache_filterable_attributes" translate="label comment" type="select" sortOrder="82" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Cache The Layer's Filterable Attribute List</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment><![CDATA[The list of filterable attributes is loaded from <code>eav_attribute</code> on every listing and search page although it changes only when an attribute is saved. Cache it per store; cleaned on attribute save.]]></comment>
+                </field>
+                <field id="serve_swatches" translate="label comment" type="select" sortOrder="83" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Serve Swatches From The Index</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment><![CDATA[Swatch type and colour/image/text value per option from the attribute-option dictionary instead of <code>eav_attribute_option_swatch</code>. An option the dictionary does not know falls back to the query.]]></comment>
+                </field></depends>
                 </field>
             </group>
 

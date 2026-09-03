@@ -7,7 +7,11 @@ namespace ParkkTech\FastMagento\Plugin;
 use Magento\Catalog\Model\Category;
 use Magento\Framework\App\Config\ScopeConfigInterface;
 use Magento\Store\Model\ScopeInterface;
+use Magento\Framework\Data\Collection as DataCollection;
+use Magento\Framework\Data\CollectionFactory as DataCollectionFactory;
+use Magento\Store\Model\StoreManagerInterface;
 use ParkkTech\FastMagento\Model\OpenSearch\CategoryDataProvider;
+use ParkkTech\FastMagento\Model\OpenSearch\CategoryModelBuilder;
 
 /**
  * Memoise the two child lookups Category makes per request.
@@ -37,8 +41,16 @@ class CategoryChildrenPlugin
 
     public function __construct(
         private readonly ScopeConfigInterface $scopeConfig,
-        private readonly CategoryDataProvider $categoryData
+        private readonly CategoryDataProvider $categoryData,
+        // Optional-with-fallback so an existing install's compiled DI survives the upgrade.
+        private ?CategoryModelBuilder $modelBuilder = null,
+        private ?DataCollectionFactory $dataCollectionFactory = null,
+        private ?StoreManagerInterface $storeManager = null
     ) {
+        $om = \Magento\Framework\App\ObjectManager::getInstance();
+        $this->modelBuilder = $modelBuilder ?? $om->get(CategoryModelBuilder::class);
+        $this->dataCollectionFactory = $dataCollectionFactory ?? $om->get(DataCollectionFactory::class);
+        $this->storeManager = $storeManager ?? $om->get(StoreManagerInterface::class);
     }
 
     /**
@@ -154,16 +166,48 @@ class CategoryChildrenPlugin
     }
 
     /**
+     * The active direct children in position order, as Category models built from the tree —
+     * what the layer's category filter, the sidebar and the category viewmodels iterate.
+     * Natively one EAV collection load with a url_rewrite join per call site.
+     *
      * @return mixed
      */
     public function aroundGetChildrenCategories(Category $subject, callable $proceed)
     {
         $key = spl_object_id($subject);
         if (!array_key_exists($key, $this->children)) {
-            $this->children[$key] = $proceed();
+            $this->children[$key] = $this->indexedChildrenCollection($subject) ?? $proceed();
         }
 
         return $this->children[$key];
+    }
+
+    private function indexedChildrenCollection(Category $subject): ?DataCollection
+    {
+        try {
+            $ids = $this->indexedChildIds($subject);
+            if ($ids === null || !$this->modelBuilder->isAvailable()) {
+                return null;
+            }
+            $storeId = (int) $this->storeManager->getStore()->getId();
+            $models = [];
+            foreach ($ids as $id) {
+                $model = $this->modelBuilder->build($id, $storeId);
+                if ($model === null) {
+                    return null;
+                }
+                $models[] = $model;
+            }
+            usort($models, static fn ($a, $b) => ((int) $a->getPosition() <=> (int) $b->getPosition()) ?: ((int) $a->getId() <=> (int) $b->getId()));
+            /** @var DataCollection $collection */
+            $collection = $this->dataCollectionFactory->create();
+            foreach ($models as $model) {
+                $collection->addItem($model);
+            }
+            return $collection;
+        } catch (\Throwable $e) {
+            return null;
+        }
     }
 
     /**

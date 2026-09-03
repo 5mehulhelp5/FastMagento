@@ -1159,6 +1159,9 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
                     'parent_ids' => [
                         'type' => 'integer'
                     ],
+                    // Canonical request path, mapped as a keyword so the URL-rewrite router can
+                    // resolve a product URL with one term query (CategoryUrlFinderPlugin).
+                    'request_path' => ['type' => 'keyword', 'ignore_above' => 1024],
                     // Related / up-sell / cross-sell id lists, in merchant position order.
                     // Mapped explicitly because the index is `dynamic: false`; the read path only
                     // ever reads them back out of _source, never queries them, so `index: false`

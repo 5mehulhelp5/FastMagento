@@ -70,6 +70,14 @@
                 <cache_layered_nav>1</cache_layered_nav>
                 <cache_layered_nav_lifetime>3600</cache_layered_nav_lifetime>
                 <cache_layered_nav_blocks>catalog.leftnav,catalogsearch.leftnav</cache_layered_nav_blocks>
+                <!-- Category controller/breadcrumb/design reads from the category index. -->
+                <serve_category_load>1</serve_category_load>
+                <!-- URL-rewrite router lookups from the category tree and product index. -->
+                <serve_url_rewrites>1</serve_url_rewrites>
+                <!-- Layer's filterable-attribute list cached per store (EAV_ATTRIBUTE tag). -->
+                <cache_filterable_attributes>1</cache_filterable_attributes>
+                <!-- Swatch type/value per option from the attribute-option dictionary. -->
+                <serve_swatches>1</serve_swatches>
             </serving>
             <plp>
                 <!--
