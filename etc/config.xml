@@ -64,6 +64,12 @@
                 <!-- Block-cache Hyvä's default-section-data (country/region list) per store.
                      Default ON; no effect on themes without that block. -->
                 <cache_section_data>1</cache_section_data>
+                <!-- Block-cache the layered navigation's HTML, keyed on category/search query,
+                     applied filters, store, currency and customer group. Filters are still
+                     applied to the product collection; only the rendering is cached. -->
+                <cache_layered_nav>1</cache_layered_nav>
+                <cache_layered_nav_lifetime>3600</cache_layered_nav_lifetime>
+                <cache_layered_nav_blocks>catalog.leftnav,catalogsearch.leftnav</cache_layered_nav_blocks>
             </serving>
             <plp>
                 <!--

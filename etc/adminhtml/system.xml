@@ -102,6 +102,22 @@
                     <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
                     <comment><![CDATA[Hyvä embeds the guest section data (every country and region) in each page; only that directory data is computed live, and it is identical for every visitor of a store. Caches that block for an hour per store and currency. No effect on other themes.]]></comment>
                 </field>
+                <field id="cache_layered_nav" translate="label comment" type="select" sortOrder="70" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Cache Layered Navigation HTML</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment><![CDATA[Cache the rendered layered navigation per category (or search query), applied filters, store, currency and customer group. The facets already come from the index; this removes the remaining template time on uncached listings. Filters are still applied to the product list &mdash; only the rendering is cached. Cleaned on category save, product status/stock changes and catalogue reindex; otherwise bounded by the lifetime below.]]></comment>
+                </field>
+                <field id="cache_layered_nav_lifetime" translate="label comment" type="text" sortOrder="71" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Layered Navigation Cache Lifetime (seconds)</label>
+                    <comment>Default 3600.</comment>
+                    <validate>validate-digits</validate>
+                    <depends><field id="cache_layered_nav">1</field></depends>
+                </field>
+                <field id="cache_layered_nav_blocks" translate="label comment" type="text" sortOrder="72" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Layered Navigation Block Names</label>
+                    <comment><![CDATA[Comma-separated layout block names. Default <code>catalog.leftnav,catalogsearch.leftnav</code> (Magento, Luma, Breeze and Hyvä).]]></comment>
+                    <depends><field id="cache_layered_nav">1</field></depends>
+                </field>
             </group>
 
             <group id="plp" translate="label" sortOrder="15" showInDefault="1" showInWebsite="1" showInStore="1">

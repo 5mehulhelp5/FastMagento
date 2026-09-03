@@ -15,6 +15,8 @@
         <!-- Menu rendered inline (no ESI round-trip under Varnish) and Hyvä's section data
              block-cached per store. See the observer for why each is safe. -->
         <observer name="fastmagento_inline_menu_section_data" instance="ParkkTech\FastMagento\Observer\InlineMenuAndSectionData" />
+        <!-- Layered navigation HTML block-cached per category/search + filter state. -->
+        <observer name="fastmagento_cache_layered_nav" instance="ParkkTech\FastMagento\Observer\CacheLayeredNavigation" />
     </event>
 
 </config>

@@ -32,6 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   region list, ~28 ms and two queries per uncached page) is cached for an hour per store and
   currency. Serving > *Cache Hyvä Section Data Per Store*.
 
+- **Layered navigation HTML block-cached.** Keyed on category or search query, applied
+  filters, store, currency and customer group; filters are still applied to the product
+  collection, only the rendering is cached (~30 ms per uncached listing on the demo). Serving >
+  *Cache Layered Navigation HTML*, with lifetime and block names configurable.
+
 ### Fixed
 - **Product documents' `reviews_count` / `rating_summary` went stale.** No mview subscription
   covered the review tables, so a newly approved review did not change the stars on product
