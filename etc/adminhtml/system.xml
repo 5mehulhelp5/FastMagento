@@ -87,6 +87,21 @@
                     <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
                     <comment><![CDATA[Answer the product page's review list from the review index: one search returns the page of reviews, every review's rating votes and the total for the pager. Without it Magento runs a COUNT, the review SELECT and one <code>rating_option_vote</code> query <em>per review shown</em>. Requires the <em>FastMagento Reviews</em> indexer; falls back to the database when the index is missing or unreachable. Only the storefront review list changes source &mdash; the review form, admin grids and customer-account lists are untouched.]]></comment>
                 </field>
+                <field id="inline_menu" translate="label comment" type="select" sortOrder="50" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Render The Category Menu Inline Under Varnish</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment><![CDATA[With Varnish as the page cache, Magento delivers the category menu as an ESI include: every cache miss then costs a <em>second</em> Magento bootstrap, routing pass and web-server hop just for the menu. This renders the menu inside the page instead; its HTML still comes from the block cache. No effect with the built-in page cache, which already renders it inline.]]></comment>
+                </field>
+                <field id="inline_menu_blocks" translate="label comment" type="text" sortOrder="51" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Menu Block Names</label>
+                    <comment><![CDATA[Comma-separated layout block names. Default covers Magento/Luma and Breeze (<code>catalog.topnav</code>) and Hyvä (<code>topmenu_generic</code>).]]></comment>
+                    <depends><field id="inline_menu">1</field></depends>
+                </field>
+                <field id="cache_section_data" translate="label comment" type="select" sortOrder="60" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Cache Hyvä Section Data Per Store</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment><![CDATA[Hyvä embeds the guest section data (every country and region) in each page; only that directory data is computed live, and it is identical for every visitor of a store. Caches that block for an hour per store and currency. No effect on other themes.]]></comment>
+                </field>
             </group>
 
             <group id="plp" translate="label" sortOrder="15" showInDefault="1" showInWebsite="1" showInStore="1">

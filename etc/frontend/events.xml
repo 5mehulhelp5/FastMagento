@@ -12,6 +12,9 @@
     -->
     <event name="layout_generate_blocks_after">
         <observer name="fastmagento_apply_instant_search_layout" instance="ParkkTech\FastMagento\Observer\ApplyInstantSearchLayout" />
+        <!-- Menu rendered inline (no ESI round-trip under Varnish) and Hyvä's section data
+             block-cached per store. See the observer for why each is safe. -->
+        <observer name="fastmagento_inline_menu_section_data" instance="ParkkTech\FastMagento\Observer\InlineMenuAndSectionData" />
     </event>
 
 </config>

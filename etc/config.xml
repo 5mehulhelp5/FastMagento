@@ -55,6 +55,15 @@
                      pager COUNT, the review SELECT and one rating-vote query per review. Default
                      ON. Falls back to MySQL when the index is missing or the cluster is down. -->
                 <serve_reviews>1</serve_reviews>
+                <!-- Under Varnish, deliver the category menu inside the page instead of as an
+                     ESI include (which costs a second Magento bootstrap per cache miss). The
+                     menu HTML still comes from the block cache. Default ON. -->
+                <inline_menu>1</inline_menu>
+                <!-- Layout names of menu blocks: Magento/Luma/Breeze and Hyvä. -->
+                <inline_menu_blocks>catalog.topnav,topmenu_generic</inline_menu_blocks>
+                <!-- Block-cache Hyvä's default-section-data (country/region list) per store.
+                     Default ON; no effect on themes without that block. -->
+                <cache_section_data>1</cache_section_data>
             </serving>
             <plp>
                 <!--

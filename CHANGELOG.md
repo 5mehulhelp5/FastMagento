@@ -23,6 +23,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   then come from the cache, invalidated when a rating or option is saved or deleted. With the
   review index above, a product page runs no review or rating query at all.
 
+- **Category menu inline under Varnish.** Magento's Varnish mode turns the menu block into an
+  ESI include, so every cache miss paid a second bootstrap, routing pass and web-server hop
+  (~120 ms on the 2.4.9 demo). FastMagento now strips the `ttl` from the menu block (Luma and
+  Breeze `catalog.topnav`, Hyvä `topmenu_generic`, configurable) so the menu renders inside the
+  page from the block cache. Serving > *Render The Category Menu Inline Under Varnish*.
+- **Hyvä section data block-cached per store.** The `default-section-data` block (country and
+  region list, ~28 ms and two queries per uncached page) is cached for an hour per store and
+  currency. Serving > *Cache Hyvä Section Data Per Store*.
+
 ### Fixed
 - **Product documents' `reviews_count` / `rating_summary` went stale.** No mview subscription
   covered the review tables, so a newly approved review did not change the stars on product
