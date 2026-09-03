@@ -4,11 +4,6 @@
 
     <group id="default">
 
-        <!-- Existing Cron Job (Keep this) -->
-        <job name="fastmagento_existing_cron" instance="ParkkTech\FastMagento\Cron\ExistingCronJob" method="execute">
-            <schedule>*/30 * * * *</schedule> <!-- Runs every 30 minutes -->
-        </job>
-
         <!-- New Cache Warmup Job (Merge this with existing jobs) -->
         <job name="fastmagento_cache_warmup" instance="ParkkTech\FastMagento\Cron\CacheWarmup" method="execute">
             <schedule>0 * * * *</schedule> <!-- Runs every hour -->
