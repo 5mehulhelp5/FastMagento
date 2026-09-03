@@ -55,7 +55,9 @@ class Diagnostics
         private readonly \Magento\Framework\ObjectManager\ConfigLoaderInterface $configLoader,
         private readonly \Magento\Framework\Filesystem $filesystem,
         private readonly \ParkkTech\FastMagento\Model\Plp\FallbackRecorder $plpFallbackRecorder,
-        private readonly \Magento\Framework\App\DeploymentConfig $deploymentConfig
+        private readonly \Magento\Framework\App\DeploymentConfig $deploymentConfig,
+        /** @var CheckProviderInterface[] DI pool; other modules register their doctor sections here. Empty in core. */
+        private readonly array $checkProviders = []
     ) {
     }
 
@@ -116,12 +118,18 @@ class Diagnostics
         $checks = array_merge($checks, $this->checkTheme());
         $checks = array_merge($checks, $this->checkCheckout());
         $checks = array_merge($checks, $this->checkLocking());
+        foreach ($this->checkProviders as $provider) {
+            $checks = array_merge($checks, $provider->check());
+        }
         $checks = array_merge($checks, $this->checkPhp());
 
         return $checks;
     }
 
-    private function resolveClient()
+    /**
+     * Public so check providers from other modules can reuse the resolved client.
+     */
+    public function resolveClient()
     {
         try {
             return $this->clientResolver
@@ -747,6 +755,64 @@ class Diagnostics
         }
 
         return $out;
+    }
+
+    /**
+     * Whether the DEPLOYED storefront bundle contains a given symbol.
+     *
+     * The source having it proves nothing: `setup:static-content:deploy -f` leaves an existing file
+     * untouched and still exits 0, so source and vendor can both be current while the browser is
+     * served a build from weeks ago. Null means the file could not be found or read, which is a
+     * different answer from "found and stale".
+     */
+    /**
+     * @param string $bundle module-relative static path, e.g. "ParkkTech_FastMagento/js/fastmagento.js"
+     */
+    public function deployedBundleCarries(string $needle, string $bundle = 'ParkkTech_FastMagento/js/fastmagento.js'): ?bool
+    {
+        // Only themes a store view actually RENDERS. Checking every deployed copy sounds safer and
+        // is not: this store keeps a permanently stale Swissup/breeze-blank build, because that
+        // theme is excluded from every deploy on purpose (its LESS crashes the deployer), and its
+        // modules are disabled so nothing renders it. Failing on that would be a doctor that is red
+        // for a condition no shopper can experience, which trains people to ignore it.
+        $themes = $this->resolveFrontendThemes();
+        if (!$themes) {
+            return null;
+        }
+
+        try {
+            $static = $this->filesystem->getDirectoryRead(
+                \Magento\Framework\App\Filesystem\DirectoryList::STATIC_VIEW
+            );
+        } catch (\Throwable $e) {
+            return null;
+        }
+
+        $seen = false;
+        foreach (array_unique($themes) as $themePath) {
+            try {
+                $matches = $static->search(
+                    'frontend/' . $themePath . '/*/' . $bundle
+                );
+            } catch (\Throwable $e) {
+                continue;
+            }
+
+            foreach ($matches as $path) {
+                try {
+                    $contents = $static->readFile($path);
+                } catch (\Throwable $e) {
+                    continue;
+                }
+                $seen = true;
+                if (strpos($contents, $needle) === false) {
+                    // One stale locale on one live theme is a whole audience reporting nothing.
+                    return false;
+                }
+            }
+        }
+
+        return $seen ? true : null;
     }
 
     /**

@@ -352,4 +352,12 @@
         <plugin name="fastmagento_category_read_handler"
                 type="ParkkTech\FastMagento\Plugin\Eav\CategoryReadHandlerPlugin" sortOrder="10"/>
     </type>
+    <!-- A partially preconfigured configurable (one attribute chosen, another left to the shopper)
+         makes core emit the unspecified attribute as null; drop those before the template. -->
+    <type name="Magento\ConfigurableProduct\Model\ConfigurableAttributeData">
+        <plugin name="parkktech_fastmagento_configurable_default_values"
+                type="ParkkTech\FastMagento\Plugin\ConfigurableDefaultValuesPlugin"
+                sortOrder="100"/>
+    </type>
+
 </config>

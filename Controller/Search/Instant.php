@@ -23,7 +23,8 @@ class Instant extends Action
         private readonly InstantSearch $instantSearch,
         private readonly CategoryDataProvider $categoryData,
         private readonly \ParkkTech\FastMagento\Model\OptionDictionary $optionDictionary,
-        private readonly \Psr\Log\LoggerInterface $logger
+        private readonly \Psr\Log\LoggerInterface $logger,
+        private readonly \ParkkTech\FastMagento\Model\Analytics\EventRecorderInterface $events
     ) {
         parent::__construct($context);
     }
@@ -41,6 +42,17 @@ class Instant extends Action
         }
 
         $result = $this->instantSearch->search($query, $page, $pageSize, $filters, true);
+
+        // Record what was asked for, once the search has actually run so the result count is real.
+        // Both signals land here: a typed query, and any facet narrowing applied alongside it.
+        // Only on the first page — paging through results is the same intent, not a new one.
+        if ($page === 1) {
+            if ($query !== '') {
+                $this->events->recordSearch($query, $filters, (int) ($result['total'] ?? 0));
+            } elseif ($filters) {
+                $this->events->recordFacetSelection($filters);
+            }
+        }
         $result['facets'] = $this->labelFacets($result['facets']);
         $result['pages'] = (int) ceil($result['total'] / max(1, $pageSize));
         $result['stateHtml'] = $this->renderState($query, $filters, $result['facets']);

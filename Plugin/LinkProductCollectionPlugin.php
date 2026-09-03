@@ -99,8 +99,14 @@ class LinkProductCollectionPlugin
 
             $docs = $this->fetcher->fetchByIds($ids);
 
+            // Display order of the MERCHANT'S set. Core returns the ids exactly as linked; a
+            // companion module may plug into
+            // orderForDisplay() and may re-order only — never add, never drop. The documents are
+            // passed along because a re-order needs them and they are already in hand.
+            $ids = $this->orderForDisplay($ids, $docs, $subject);
+
             $shells = [];
-            foreach ($ids as $id) {                       // position order preserved
+            foreach ($ids as $id) {                       // merchant position, or a decorated order
                 $doc = $docs[$id] ?? null;
                 if ($doc === null) {
                     return $proceed($printQuery, $logQuery);   // a linked product not in OS native
@@ -131,6 +137,23 @@ class LinkProductCollectionPlugin
             );
             return $proceed($printQuery, $logQuery);
         }
+    }
+
+    /**
+     * The order in which the merchant's linked ids are displayed.
+     *
+     * Core's answer is the merchant's own order, unchanged. This is a public seam: the
+     * companion module may decorate it with an after-plugin that permutes the ids for the
+     * current shopper. Whatever plugs in here must return a permutation of `$ids` — the set is the
+     * merchant's and a row that has quietly lost or gained a product is a bug.
+     *
+     * @param int[] $ids merchant order, from catalog_product_link position
+     * @param array<int, array<string, mixed>> $docs the OpenSearch documents for those ids
+     * @return int[]
+     */
+    public function orderForDisplay(array $ids, array $docs, Collection $subject): array
+    {
+        return $ids;
     }
 
     /**
