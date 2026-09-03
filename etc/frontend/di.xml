@@ -332,10 +332,11 @@
         <plugin name="fastmagento_review_list_from_index"
                 type="ParkkTech\FastMagento\Plugin\Review\ReviewListFromIndexPlugin" sortOrder="10"/>
     </type>
-    <!-- Load the review form's rating set once per request, not once per caller. -->
+    <!-- The review form's rating set from the cache (and once per request) instead of three
+         queries per product page; invalidated on rating save/delete in etc/di.xml. -->
     <type name="Magento\Review\Block\Form">
-        <plugin name="fastmagento_ratings_memo"
-                type="ParkkTech\FastMagento\Plugin\Review\RatingsMemoPlugin" sortOrder="10"/>
+        <plugin name="fastmagento_ratings_cache"
+                type="ParkkTech\FastMagento\Plugin\Review\RatingsCachePlugin" sortOrder="10"/>
     </type>
     <!-- MSRP apply-to list via the cached EAV config instead of four attribute-load queries. -->
     <type name="Magento\Msrp\Model\Msrp">

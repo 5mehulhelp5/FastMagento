@@ -130,4 +130,13 @@
                 type="ParkkTech\FastMagento\Model\Search\NullExplorationWindow"/>
     <preference for="ParkkTech\FastMagento\Model\Analytics\EventRecorderInterface"
                 type="ParkkTech\FastMagento\Model\Analytics\NullEventRecorder"/>
+    <!-- Drop the cached review-form rating set when a rating or option changes (RatingsCachePlugin). -->
+    <type name="Magento\Review\Model\ResourceModel\Rating">
+        <plugin name="fastmagento_ratings_cache_invalidate"
+                type="ParkkTech\FastMagento\Plugin\Review\RatingsCacheInvalidationPlugin" sortOrder="10"/>
+    </type>
+    <type name="Magento\Review\Model\ResourceModel\Rating\Option">
+        <plugin name="fastmagento_ratings_cache_invalidate_option"
+                type="ParkkTech\FastMagento\Plugin\Review\RatingsCacheInvalidationPlugin" sortOrder="10"/>
+    </type>
 </config>

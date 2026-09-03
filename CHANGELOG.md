@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Existing installs: `bin/magento indexer:reindex fastmagento_review` and put it in schedule
   mode like the other three.
 
+- **Review-form rating set cached.** The three queries behind the "Rating" rows of the
+  product-page review form (ratings, their count, their options) now run once per store and
+  then come from the cache, invalidated when a rating or option is saved or deleted. With the
+  review index above, a product page runs no review or rating query at all.
+
 ### Fixed
 - **Product documents' `reviews_count` / `rating_summary` went stale.** No mview subscription
   covered the review tables, so a newly approved review did not change the stars on product
