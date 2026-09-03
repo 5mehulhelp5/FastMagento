@@ -85,6 +85,13 @@ class OpenSearchConfig extends AbstractHelper
      * (PDP additional attributes, layered-nav facets, swatches, search) resolve from OpenSearch
      * instead of eav_attribute_option* MySQL loads. e.g. magento2_attribute_options.
      */
+    public function getReviewIndexName(): string
+    {
+        $defaultPrefix = $this->scopeConfig->getValue('catalog/search/opensearch_index_prefix') ?? 'magento2';
+        $customSuffix = $this->scopeConfig->getValue('fastmagento/indexing/opensearch_review_index_prefix') ?? 'reviews';
+        return $defaultPrefix . '_' . $customSuffix;
+    }
+
     public function getAttributeOptionIndexName(): string
     {
         $defaultPrefix = $this->scopeConfig->getValue('catalog/search/opensearch_index_prefix') ?? 'magento2';

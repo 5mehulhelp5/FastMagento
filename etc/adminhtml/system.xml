@@ -34,6 +34,10 @@
                     <label>Category Index Suffix</label>
                     <comment>Suffix for the FastMagento category index. Default "categories".</comment>
                 </field>
+                <field id="opensearch_review_index_prefix" translate="label" type="text" sortOrder="41" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Review Index Suffix</label>
+                    <comment>Suffix for the FastMagento review index (one document per approved review). Default "reviews".</comment>
+                </field>
 
                 <field id="instant_product_update" translate="label comment" type="select" sortOrder="50" showInDefault="1" showInWebsite="1" showInStore="1">
                     <label>Instant Product Update on Save</label>
@@ -77,6 +81,11 @@
                     <label>Serve Category Attributes From The Index</label>
                     <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
                     <comment><![CDATA[Fill a category's attribute values from the indexed document instead of running the UNION across <code>catalog_category_entity_varchar/int/text/decimal/datetime</code>. The category itself is still loaded by Magento &mdash; only the attribute fetch changes source &mdash; so layout handles, design settings and custom layout updates all still resolve through the normal path. All-or-nothing: a document that cannot answer for every attribute falls back to the query.]]></comment>
+                </field>
+                <field id="serve_reviews" translate="label comment" type="select" sortOrder="40" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Serve Product Reviews From The Index</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment><![CDATA[Answer the product page's review list from the review index: one search returns the page of reviews, every review's rating votes and the total for the pager. Without it Magento runs a COUNT, the review SELECT and one <code>rating_option_vote</code> query <em>per review shown</em>. Requires the <em>FastMagento Reviews</em> indexer; falls back to the database when the index is missing or unreachable. Only the storefront review list changes source &mdash; the review form, admin grids and customer-account lists are untouched.]]></comment>
                 </field>
             </group>
 

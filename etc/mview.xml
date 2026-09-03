@@ -36,4 +36,12 @@
             <table name="eav_attribute_option_value" entity_column="option_id" />
         </subscriptions>
     </view>
+    <view id="fastmagento_review" class="ParkkTech\FastMagento\Model\Indexer\ReviewIndexer" group="indexer">
+        <subscriptions>
+            <table name="review" entity_column="review_id" />
+            <table name="review_detail" entity_column="review_id" />
+            <table name="review_store" entity_column="review_id" />
+            <table name="rating_option_vote" entity_column="review_id" />
+        </subscriptions>
+    </view>
 </config>

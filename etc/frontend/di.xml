@@ -326,6 +326,12 @@
         <plugin name="fastmagento_review_collection_size"
                 type="ParkkTech\FastMagento\Plugin\Review\ReviewCollectionSizePlugin" sortOrder="10"/>
     </type>
+    <!-- Product-page review list (and its pager total, and every review's rating votes) from
+         the review index in one search, instead of COUNT + SELECT + one vote query per review. -->
+    <type name="Magento\Review\Model\ResourceModel\Review\Collection">
+        <plugin name="fastmagento_review_list_from_index"
+                type="ParkkTech\FastMagento\Plugin\Review\ReviewListFromIndexPlugin" sortOrder="10"/>
+    </type>
     <!-- Load the review form's rating set once per request, not once per caller. -->
     <type name="Magento\Review\Block\Form">
         <plugin name="fastmagento_ratings_memo"

@@ -40,4 +40,19 @@
             labels (PDP attributes, layered-nav facets, swatches, search) resolve without MySQL.
         </description>
     </indexer>
+    <indexer
+        id="fastmagento_review"
+        view_id="fastmagento_review"
+        class="ParkkTech\FastMagento\Model\Indexer\ReviewIndexer"
+        primary="fastmagento_review"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:noNamespaceSchemaLocation="urn:magento:framework:Indexer/etc/indexer.xsd"
+    >
+        <title translate="true">FastMagento Reviews</title>
+        <description translate="true">
+            Projects approved product reviews with their rating votes to OpenSearch (one document
+            per review) so the product page's review list needs no MySQL, and keeps each product
+            document's review count and rating summary current.
+        </description>
+    </indexer>
 </config>

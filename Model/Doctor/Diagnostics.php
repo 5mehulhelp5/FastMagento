@@ -226,10 +226,17 @@ class Diagnostics
                 ->from($this->resource->getTableName('catalog_product_entity'), 'COUNT(*)')
         );
 
+        $approvedReviews = (int) $this->resource->getConnection()->fetchOne(
+            $this->resource->getConnection()->select()
+                ->from($this->resource->getTableName('review'), 'COUNT(*)')
+                ->where('status_id = ?', \Magento\Review\Model\Review::STATUS_APPROVED)
+        );
+
         $indices = [
             'product serving index' => [$this->openSearchConfig->getIndexName(), $productCount],
             'category serving index' => [$this->openSearchConfig->getCategoryIndexName(), null],
             'attribute option dictionary' => [$this->openSearchConfig->getAttributeOptionIndexName(), null],
+            'review index' => [$this->openSearchConfig->getReviewIndexName(), $approvedReviews],
         ];
 
         foreach ($indices as $label => [$indexName, $expected]) {
@@ -240,6 +247,10 @@ class Diagnostics
                 $stats = $client->count(['index' => $indexName]);
                 $docs = (int) ($stats['count'] ?? 0);
 
+                if ($docs === 0 && $expected === 0) {
+                    $out[] = Check::ok(self::G_INDEX, $label, sprintf('%s is empty, and so is the source table', $indexName));
+                    continue;
+                }
                 if ($docs === 0) {
                     $out[] = Check::fail(
                         self::G_INDEX,

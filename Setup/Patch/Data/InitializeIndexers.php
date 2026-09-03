@@ -34,6 +34,7 @@ class InitializeIndexers implements DataPatchInterface, PatchRevertableInterface
         'fastmagento_product',
         'fastmagento_category',
         'fastmagento_attribute_option',
+        'fastmagento_review',
     ];
 
     public function __construct(

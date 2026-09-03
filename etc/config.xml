@@ -6,6 +6,7 @@
             <indexing>
                 <opensearch_index_prefix>products</opensearch_index_prefix>
                 <opensearch_category_index_prefix>categories</opensearch_category_index_prefix>
+                <opensearch_review_index_prefix>reviews</opensearch_review_index_prefix>
                 <!-- Instant product update. Default ON: a MANUAL SINGLE-PRODUCT ADMIN EDIT
                      (catalog_product_save) immediately reprojects that product (+ composite
                      parents) into OpenSearch and purges its full-page cache, bypassing the
@@ -50,6 +51,10 @@
                      answer for every attribute the handler would return falls through to the
                      query. -->
                 <serve_category_attributes>1</serve_category_attributes>
+                <!-- Product-page review list from the review index: one search replaces the
+                     pager COUNT, the review SELECT and one rating-vote query per review. Default
+                     ON. Falls back to MySQL when the index is missing or the cluster is down. -->
+                <serve_reviews>1</serve_reviews>
             </serving>
             <plp>
                 <!--

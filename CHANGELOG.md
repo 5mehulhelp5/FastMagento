@@ -5,6 +5,27 @@ All notable changes to FastMagento are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Product reviews served from OpenSearch.** New `fastmagento_review` indexer projects every
+  approved review, with its rating votes, into its own index (one document per review; the full
+  build streams the review table by keyset so memory is flat at any review count; partial runs
+  touch only the changed reviews). The product page's review list, its pager total and every
+  review's star votes now come from one search instead of a COUNT, a SELECT and one
+  `rating_option_vote` query per review shown. Toggle: FastMagento > Serving > *Serve Product
+  Reviews From The Index* (default on; falls back to MySQL when the index is unavailable).
+  Existing installs: `bin/magento indexer:reindex fastmagento_review` and put it in schedule
+  mode like the other three.
+
+### Fixed
+- **Product documents' `reviews_count` / `rating_summary` went stale.** No mview subscription
+  covered the review tables, so a newly approved review did not change the stars on product
+  cards until the next product reindex. The review indexer now pushes the two summary fields to
+  the affected product documents as a partial update on every review change.
+- **Repeated OpenSearch round-trips for the same product within one request.** The PDP fetch
+  helper now memoises documents per request (7 single-document GETs per product page became 2).
+
 ## [2.6.1]
 
 ### Fixed
