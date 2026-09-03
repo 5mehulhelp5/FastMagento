@@ -99,7 +99,10 @@ class CategoryParentsFromIndexPlugin
     private function enabled(): bool
     {
         return $this->appState->getAreaCode() === Area::AREA_FRONTEND
-            && $this->scopeConfig->isSetFlag(CategoryRepositoryFromIndexPlugin::XML_PATH_ENABLED, ScopeInterface::SCOPE_STORE)
+            && $this->scopeConfig->isSetFlag(
+                CategoryRepositoryFromIndexPlugin::XML_PATH_ENABLED,
+                ScopeInterface::SCOPE_STORE
+            )
             && $this->builder->isAvailable();
     }
 }

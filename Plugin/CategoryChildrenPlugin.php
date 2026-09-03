@@ -198,7 +198,9 @@ class CategoryChildrenPlugin
                 }
                 $models[] = $model;
             }
-            usort($models, static fn ($a, $b) => ((int) $a->getPosition() <=> (int) $b->getPosition()) ?: ((int) $a->getId() <=> (int) $b->getId()));
+            usort($models, static function ($a, $b) {
+                return ((int) $a->getPosition() <=> (int) $b->getPosition()) ?: ((int) $a->getId() <=> (int) $b->getId());
+            });
             /** @var DataCollection $collection */
             $collection = $this->dataCollectionFactory->create();
             foreach ($models as $model) {

@@ -100,7 +100,8 @@ class CategoryUrlFinderPlugin
 
         $categoryId = $this->categoryByPath($path, $storeId);
         if ($categoryId) {
-            return $this->rewrite('category', $categoryId, $path, 'catalog/category/view/id/' . $categoryId, $storeId);
+            $target = 'catalog/category/view/id/' . $categoryId;
+            return $this->rewrite('category', $categoryId, $path, $target, $storeId);
         }
         $productId = $this->productByPath($path);
         if ($productId) {
@@ -172,7 +173,8 @@ class CategoryUrlFinderPlugin
             && (int) (($doc = $this->categoryData->getById($entityId))['store_id'] ?? 0) === $storeId
             && ($doc['request_path'] ?? '') !== ''
         ) {
-            return $this->rewrite('category', $entityId, (string) $doc['request_path'], 'catalog/category/view/id/' . $entityId, $storeId);
+            $target = 'catalog/category/view/id/' . $entityId;
+            return $this->rewrite('category', $entityId, (string) $doc['request_path'], $target, $storeId);
         }
         // Batch-then-map fallback: one findAllByData for all categories in the store, then
         // in-memory lookups, instead of one query per category rendered.

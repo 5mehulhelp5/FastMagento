@@ -325,6 +325,7 @@ class ReviewIndexer implements ActionInterface, MviewActionInterface
             }
         } catch (\Throwable $e) {
             // Index missing (first run before a full build): nothing indexed, nothing to map.
+            $this->writeLog->writeInfoLog('[FastMagento] review index not readable yet: ' . $e->getMessage());
         }
         return $out;
     }

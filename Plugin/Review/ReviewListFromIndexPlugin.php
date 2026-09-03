@@ -134,7 +134,8 @@ class ReviewListFromIndexPlugin
                 return false;
             }
             $status = $subject->getFlag(self::KEY_STATUS);
-            if ($status !== Review::STATUS_APPROVED && $status !== 'approved' && (string) $status !== (string) Review::STATUS_APPROVED) {
+            $approved = $status === 'approved' || (string) $status === (string) Review::STATUS_APPROVED;
+            if (!$approved) {
                 return false;
             }
             if ($subject->getFlag(self::KEY_STORE) === null) {

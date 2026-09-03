@@ -45,7 +45,9 @@ class CacheLayeredNavigation implements ObserverInterface
     public const XML_PATH_BLOCKS = 'fastmagento/serving/cache_layered_nav_blocks';
 
     /** Request parameters that change the listing but not the navigation. */
-    private const NON_FILTER_PARAMS = ['p', 'product_list_limit', 'product_list_order', 'product_list_dir', 'product_list_mode'];
+    private const NON_FILTER_PARAMS = [
+        'p', 'product_list_limit', 'product_list_order', 'product_list_dir', 'product_list_mode',
+    ];
 
     public function __construct(
         private readonly ScopeConfigInterface $scopeConfig,

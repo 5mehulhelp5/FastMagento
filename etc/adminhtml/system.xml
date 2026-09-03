@@ -116,7 +116,8 @@
                 <field id="cache_layered_nav_blocks" translate="label comment" type="text" sortOrder="72" showInDefault="1" showInWebsite="1" showInStore="1">
                     <label>Layered Navigation Block Names</label>
                     <comment><![CDATA[Comma-separated layout block names. Default <code>catalog.leftnav,catalogsearch.leftnav</code> (Magento, Luma, Breeze and Hyvä).]]></comment>
-                    <depends><field id="cache_layered_nav">1</field>
+                    <depends><field id="cache_layered_nav">1</field></depends>
+                </field>
                 <field id="serve_category_load" translate="label comment" type="select" sortOrder="80" showInDefault="1" showInWebsite="1" showInStore="1">
                     <label>Serve The Current Category From The Index</label>
                     <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
@@ -136,7 +137,6 @@
                     <label>Serve Swatches From The Index</label>
                     <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
                     <comment><![CDATA[Swatch type and colour/image/text value per option from the attribute-option dictionary instead of <code>eav_attribute_option_swatch</code>. An option the dictionary does not know falls back to the query.]]></comment>
-                </field></depends>
                 </field>
             </group>
 

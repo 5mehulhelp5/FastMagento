@@ -307,7 +307,10 @@ class OptionDictionary
         $out = [];
         try {
             $select = $conn->select()
-                ->from($this->resource->getTableName('eav_attribute_option_swatch'), ['swatch_id', 'option_id', 'store_id', 'type', 'value'])
+                ->from(
+                    $this->resource->getTableName('eav_attribute_option_swatch'),
+                    ['swatch_id', 'option_id', 'store_id', 'type', 'value']
+                )
                 ->where('store_id IN (?)', [0, $storeId])
                 ->order('store_id ASC');   // admin row first, store row overrides
             foreach ($conn->fetchAll($select) as $row) {

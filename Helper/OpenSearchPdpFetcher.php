@@ -122,5 +122,4 @@ class OpenSearchPdpFetcher
         }
         return null;
     }
-
 }

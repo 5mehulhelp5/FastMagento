@@ -75,7 +75,12 @@ class FilterableAttributeListCachePlugin
                 foreach ($native as $attribute) {
                     $rows[] = [(int) $attribute->getId(), (string) $attribute->getData('store_label')];
                 }
-                $this->cache->save($this->serializer->serialize($rows), $key, [EavAttribute::CACHE_TAG], self::LIFETIME);
+                $this->cache->save(
+                    $this->serializer->serialize($rows),
+                    $key,
+                    [EavAttribute::CACHE_TAG],
+                    self::LIFETIME
+                );
             } catch (\Throwable $e) {
                 $this->logger->debug('[FastMagento] filterable attribute cache write failed: ' . $e->getMessage());
             }
