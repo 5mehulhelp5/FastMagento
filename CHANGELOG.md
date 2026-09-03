@@ -5,6 +5,19 @@ All notable changes to FastMagento are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **`Setup/Uninstall`.** `module:uninstall --remove-data` now deletes the four OpenSearch
+  serving indices, the mview changelog tables, indexer/mview state rows, cron schedule rows and
+  every `fastmagento/*` setting. Previously all of it survived an uninstall.
+- **INSTALL.md**: four indexers (reviews), cron before serving on large catalogues, the
+  post-deploy FPM/opcache reload, and an uninstall section covering the embedded-composer
+  authentication failure.
+
+### Changed
+- `fastmagento/cache/warm_paths` defaults to `/` instead of empty.
+
 ## [2.8.0] - 2026-09-03
 
 ### Added

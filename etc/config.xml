@@ -178,7 +178,8 @@
                 <!-- Comma-separated paths to request after a flush. Empty = each store's home
                      page. A category page is the highest-value entry after home: the EAV and
                      block caches it builds are the ones every other category page reuses. -->
-                <warm_paths/>
+                <!-- Home is always worth warming; add listing/product paths per store. -->
+                <warm_paths>/</warm_paths>
             </cache>
             <efficiency>
                 <!-- Extension-efficiency monitor. Scheduled scan is OFF by default: the scan

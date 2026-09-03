@@ -53,9 +53,9 @@ from `composer.json` (or provide valid `auth.json` credentials) before deploying
 
 ---
 
-## 3. Indexers — reindex ALL THREE (this is easy to miss)
+## 3. Indexers — reindex ALL FOUR (this is easy to miss)
 
-FastMagento registers three indexers (`etc/indexer.xml`). They build the OpenSearch
+FastMagento registers four indexers (`etc/indexer.xml`). They build the OpenSearch
 serving documents. A deploy that only reindexes product+category leaves attribute
 option labels stale → facet labels silently break.
 
@@ -63,6 +63,7 @@ option labels stale → facet labels silently break.
 bin/magento indexer:reindex fastmagento_product
 bin/magento indexer:reindex fastmagento_category
 bin/magento indexer:reindex fastmagento_attribute_option   # <-- do NOT forget this one
+bin/magento indexer:reindex fastmagento_review             # product reviews (2.8+)
 bin/magento indexer:reindex catalogsearch_fulltext         # native, still required
 ```
 
@@ -185,6 +186,11 @@ The `fm_search_keywords` table does not exist until the generator has run at lea
 
 ## 7. Cron
 
+**Cron must be running before you enable serving.** A fresh install leaves the four indexers
+invalid and Magento's `indexer_reindex_all_invalid` cron job builds them; on a large catalogue
+that first build runs for hours inside the cron process — plan it (or run
+`bin/magento indexer:reindex` yourself in a screen session) rather than discovering it.
+
 `etc/crontab.xml` adds: a cache-warmup job (hourly), an existing maintenance job (every
 30 min), and an efficiency scan (config-gated by `fastmagento/efficiency/cron_enabled`,
 **off** by default). Magento cron must be running for these.
@@ -198,7 +204,7 @@ The `fm_search_keywords` table does not exist until the generator has run at lea
 
 ## 8. Post-install verification checklist
 
-- [ ] `bin/magento indexer:status` — all 3 `fastmagento_*` indexers `Ready`.
+- [ ] `bin/magento indexer:status` — all 4 `fastmagento_*` indexers `Ready`.
 - [ ] `_cat/indices` — `magento2_products` / `magento2_categories` /
       `magento2_attribute_options` all populated.
 - [ ] `curl /fastmagento/search/instant?q=<term>` → `200` + JSON with `products`.
@@ -211,7 +217,40 @@ The `fm_search_keywords` table does not exist until the generator has run at lea
 
 ---
 
-## 9. Multi-store note
+## 9. Deploying an update (and why the storefront can 500 for a minute if you skip this)
+
+After any `composer require` / `composer update` / `composer remove` on a production box:
+
+```
+bin/magento setup:di:compile
+bin/magento setup:upgrade --keep-generated
+bin/magento cache:flush
+# then reload PHP-FPM (or call opcache_reset()). With opcache.validate_timestamps=0, or a long
+# opcache.revalidate_freq, the running workers keep the OLD composer autoload and will require
+# files that no longer exist -> HTTP 500 -> Varnish marks the backend sick for its probe window.
+sudo systemctl reload php8.x-fpm
+```
+
+## 10. Uninstall
+
+```
+bin/magento module:uninstall --remove-data ParkkTech_FastMagentoPersonalization ParkkTech_FastMagentoCheckout ParkkTech_FastMagento
+```
+
+`--remove-data` runs this module's `Setup/Uninstall`: it deletes the four OpenSearch serving
+indices, the mview changelog tables, indexer/mview state, cron schedule rows and every
+`fastmagento/*` setting (companions cannot run without the core, so their settings go too).
+Magento then tries to `composer remove` the packages with its own embedded composer, which has
+no `auth.json`; on a project with private or VCS repositories that step fails with
+"Could not authenticate against github.com". If it does, finish by hand:
+
+```
+composer remove parkktech/fastmagento-personalization parkktech/fastmagento-checkout parkktech/fastmagento
+bin/magento setup:di:compile && bin/magento cache:flush
+sudo systemctl reload php8.x-fpm     # see section 9
+```
+
+## 11. Multi-store note
 
 Search indexes are per store view. A website with **no products assigned** produces an
 empty native search index for its store — expected, not a bug. (On this install,
