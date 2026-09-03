@@ -41,7 +41,9 @@ class InstantSearch
         private readonly WriteLog $writeLog,
         private readonly RelevanceConfig $relevanceConfig,
         private readonly ProductRepositoryInterface $productRepository,
-        private readonly CustomerSession $customerSession
+        private readonly CustomerSession $customerSession,
+        private readonly QueryDecoratorInterface $queryDecorator,
+        private readonly ExplorationWindowInterface $exploration
     ) {
     }
 
@@ -88,11 +90,22 @@ class InstantSearch
 
         try {
             $client = $this->getClient();
+
             $storeId = (int) $this->storeManager->getStore()->getId();
 
+            // The exploration slot needs the ranking below the fold to choose from, so an
+            // eligible request fetches the whole window and slices its page out afterwards — the
+            // same global-permutation contract the native path uses, so both surfaces paginate
+            // consistently. Never on an explicit sort: a shopper who ordered by price gets price
+            // order, exactly. See ExplorationSlot for the policy.
+            $from = ($page - 1) * $pageSize;
+            $explore = $sortOverride === null
+                && $this->exploration->isActive($storeId)
+                && $from < $this->exploration->windowSize($pageSize);
+
             $body = [
-                'from' => ($page - 1) * $pageSize,
-                'size' => $pageSize,
+                'from' => $explore ? 0 : $from,
+                'size' => $explore ? max($from + $pageSize, $this->exploration->windowSize($pageSize)) : $pageSize,
                 'query' => $this->buildQuery($query, $filters),
                 '_source' => ['name', 'sku'],
                 'track_total_hits' => true,
@@ -130,6 +143,14 @@ class InstantSearch
 
             $hits = $response['hits']['hits'] ?? [];
             $ids = array_map(static fn ($h) => (int) $h['_id'], $hits);
+
+            if ($explore) {
+                $ids = array_slice(
+                    $this->exploration->permute($ids, $pageSize, $storeId),
+                    $from,
+                    $pageSize
+                );
+            }
 
             return [
                 'query' => $query,
@@ -266,7 +287,7 @@ class InstantSearch
         // Gently boost in-stock products above out-of-stock ones (keeps text relevance
         // primary, unlike a hard sort).
         if ($this->relevanceConfig->isBoostInStockEnabled()) {
-            return [
+            return $this->decorateQuery([
                 'function_score' => [
                     'query' => ['bool' => $bool],
                     'functions' => [[
@@ -276,9 +297,39 @@ class InstantSearch
                     'boost_mode' => 'multiply',
                     'score_mode' => 'sum',
                 ],
-            ];
+            ]);
         }
-        return ['bool' => $bool];
+        return $this->decorateQuery(['bool' => $bool]);
+    }
+
+    /**
+     * Hand the assembled query to the decoration seam — the last step before it is issued.
+     *
+     * Sits here, after every relevance clause is built, so a decorator only ever adds to a finished
+     * ranking and never changes textual or business relevance. Core's default decorator returns
+     * the identical array; any decorator is required to fail closed, and this wrapper guarantees
+     * it: a throwing decorator costs nothing but its own effect.
+     */
+    private function decorateQuery(array $query): array
+    {
+        try {
+            // Surface and target identifiers a decorator keys on: this is the storefront search
+            // surface, ranking against Magento's native index (see the TARGET_NATIVE note below).
+            return $this->queryDecorator->decorate(
+                $query,
+                'search',
+                // TARGET_NATIVE, not the serving index. getSearchIndex() resolves
+                // {prefix}_product_{storeId} — this grid RANKS against Magento's index and only
+                // HYDRATES from FastMagento's. Gating with serving-index shares here would emit
+                // `attributes.color = "Black"` against an index whose colour field is an integer
+                // option id, matching nothing, silently.
+                'native',
+                (int) $this->storeManager->getStore()->getId()
+            );
+        } catch (\Throwable $e) {
+            // A decorator is never allowed to cost a shopper their search results.
+            return $query;
+        }
     }
 
     /**

@@ -50,8 +50,8 @@ Three independent deliverables. Build in this order (1 → 2 → 3); each is shi
 ## Deliverable 1 — `fm_search_keywords` attribute + AI population
 
 **What:** a hidden, non-frontend product attribute the AI fills with search keywords/synonyms
-per product, indexed as a high-weight searchable field so e.g. a "UTV" product surfaces for
-"UTV / side-by-side / SxS" even if the visible copy never says it.
+per product, indexed as a high-weight searchable field so e.g. a "hoodie" product surfaces for
+"hoodie / pullover / hoody" even if the visible copy never says it.
 
 **1a. Create the attribute (data/schema patch).**
 - New `Setup/Patch/Data/AddSearchKeywordsAttribute.php` (EAV attribute via
@@ -68,9 +68,9 @@ per product, indexed as a high-weight searchable field so e.g. a "UTV" product s
 
 **1b. Populate it with AI (batched — this is the hard part).**
 - Extend the AI layer with a `Model/Ai/SearchKeywordGenerator.php` (mirror ThesaurusGenerator
-  structure). For each product (or batch of N), send name + key attributes (make/model/
-  part_type/vehicle_type/etc.) + short description to Anthropic and ask for a compact,
-  comma-separated keyword/synonym list (buyer terms, platform aliases: UTV↔side-by-side↔SxS,
+  structure). For each product (or batch of N), send name + key attributes (brand/style/
+  product_type/category/etc.) + short description to Anthropic and ask for a compact,
+  comma-separated keyword/synonym list (buyer terms, platform aliases: hoodie↔pullover↔hoody,
   etc.). Write the result to `fm_search_keywords` via the product resource
   (`Magento\Catalog\Model\ResourceModel\Product\Action::updateAttributes` — bulk, no full save).
 - **Batching is mandatory:** 14,600 products cannot be one API call each on the request path.
@@ -99,8 +99,8 @@ products change (hook `catalog_product_save_after` to clear/regenerate lazily, o
 
 ## Deliverable 2 — Search-operator toggle (AND / OR / phrase), Sphinx-style
 
-**What:** admin control over how multiple query terms combine, fixing "Frontend UTV" returning
-frontend-only matches.
+**What:** admin control over how multiple query terms combine, fixing "Leather Crossbody" returning
+leather-only matches.
 
 - New `system.xml` (group `search`) select `search_operator`: `any` (OR — current behavior,
   `minimum_should_match:1`) | `all` (AND — every term must match) | `most` (e.g.
@@ -116,30 +116,30 @@ frontend-only matches.
 
 ## Deliverable 3 — Relevance overhaul toward Algolia/Sphinx
 
-**What:** ranking quality — "UTV" should rank UTV parts above unrelated "seats". This is the
+**What:** ranking quality — "hoodie" should rank hoodies above unrelated "sandals". This is the
 biggest, most iterative piece; use the Mirasvit doc as the feature checklist.
 
 Candidate work (scope with the user; not all at once):
 - **Per-attribute searchability + weights UI** already exists (`searchable_attributes`); make
-  sure `name`, `sku`, `fm_search_keywords`, `part_type`/`vehicle_type` labels, category names
+  sure `name`, `sku`, `fm_search_keywords`, `product_type`/`style` labels, category names
   carry sensible default weights (name/sku/keywords high).
 - **Exact / phrase boosting:** add a `match_phrase` (or `multi_match type:phrase`) clause with a
   high boost so exact and in-order matches outrank scattered token hits — this is what fixes the
-  "seats above UTV" ranking.
+  "sandals above hoodie" ranking.
 - **Field-level tie-breakers / `tie_breaker`** on `multi_match`, and consider `cross_fields` so a
   multi-field product isn't penalized.
 - **Category/attribute term matching:** ensure `category_names` and the human labels of
-  filterable attributes (`{code}_value`) are searchable so "UTV" (a vehicle_type option label)
+  filterable attributes (`{code}_value`) are searchable so "Crewneck" (a style option label)
   matches products carrying that option even without keywords.
 - **Custom ranking signals:** `custom_ranking_attribute`/`direction` already exist; wire them
   into the `function_score` alongside in-stock boost (bestseller/newest/etc.).
 - **Typo tolerance** (`fuzziness:AUTO`) already toggled — verify it doesn't drown exact matches
   (usually lower-boost the fuzzy clause).
 - **Synonyms/thesaurus** already feed lower-boosted variants; once `fm_search_keywords` exists,
-  much of the "UTV↔SxS" need is covered per-product instead of globally.
+  much of the "hoodie↔pullover" need is covered per-product instead of globally.
 
 **Test harness idea:** a small CLI (`docs/tools/search-relevance.php`) that runs a set of golden
-queries ("UTV", "Frontend UTV", "front end", brand names) and prints the top-10 with scores, so
+queries ("hoodie", "Leather Crossbody", "crossbody bag", brand names) and prints the top-10 with scores, so
 relevance changes are measured, not guessed. Build this first in D3 and iterate against it.
 
 ---

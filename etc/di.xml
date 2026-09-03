@@ -115,4 +115,19 @@
             <argument name="productCollectionFactory" xsi:type="object">ParkkTech\FastMagento\Model\ResourceModel\Quote\Item\AbsentCheckProductCollectionFactory</argument>
         </arguments>
     </type>
+    <!-- fastmagento:doctor extension point. Core ships no providers; other modules add
+         CheckProviderInterface implementations to this array. -->
+    <type name="ParkkTech\FastMagento\Model\Doctor\Diagnostics">
+        <arguments>
+            <argument name="checkProviders" xsi:type="array"/>
+        </arguments>
+    </type>
+    <!-- Search-stack seams. Core's defaults do nothing; a companion module may override each
+         preference with its own implementation. -->
+    <preference for="ParkkTech\FastMagento\Model\Search\QueryDecoratorInterface"
+                type="ParkkTech\FastMagento\Model\Search\NullQueryDecorator"/>
+    <preference for="ParkkTech\FastMagento\Model\Search\ExplorationWindowInterface"
+                type="ParkkTech\FastMagento\Model\Search\NullExplorationWindow"/>
+    <preference for="ParkkTech\FastMagento\Model\Analytics\EventRecorderInterface"
+                type="ParkkTech\FastMagento\Model\Analytics\NullEventRecorder"/>
 </config>

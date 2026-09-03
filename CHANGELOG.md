@@ -5,6 +5,19 @@ All notable changes to FastMagento are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.1]
+
+### Fixed
+- **System configuration page threw `The XML in file ".../etc/adminhtml/system.xml"
+  is invalid` in developer mode.** The `instant_category_update` field had been
+  nested inside the `<depends>` of `instant_purge_categories`. Default and
+  production mode parse it silently, so it only surfaced for developers.
+- **Add to cart crashed with `ProductRepository::prepareSku(): Argument #1 ($sku)
+  must be of type string, null given`.** Any `ProductRepository::get($sku)` on the
+  storefront hit this: core `get()` ignores the return value of `$product->load()`
+  and `FrontendProductPlugin::aroundLoad` returned a shell without hydrating the
+  subject. `aroundGet` now resolves the id and routes through `getById()`.
+
 ## [2.4.1]
 
 ### Fixed

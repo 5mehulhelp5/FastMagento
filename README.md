@@ -34,6 +34,15 @@
 > ```bash
 > composer require parkktech/fastmagento-checkout
 > ```
+>
+> 🧠 **[ParkkTech FastMagento Personalisation](https://github.com/parkktech/FastMagentoPersonalization)** — an
+> optional companion that builds a per-shopper profile from what they buy, view, search and filter, and
+> re-ranks FastMagento's OpenSearch-served search, listings and recommendation rows for that shopper.
+> Ships dark and off; core runs byte-identically without it.
+>
+> ```bash
+> composer require parkktech/fastmagento-personalization
+> ```
 
 > 🐌➡️🚀 Magento 2 is powerful, extensible, and — on a big catalog — perfectly happy to run 20,000 SQL
 > queries to render a homepage and loop your inventory tables *thirty times* just because you

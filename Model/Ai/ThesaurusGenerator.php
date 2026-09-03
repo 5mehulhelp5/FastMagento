@@ -69,7 +69,7 @@ class ThesaurusGenerator
         $connection = $this->resource->getConnection();
         $budget = $this->aiConfig->getMaxTerms();
 
-        // Attributes with an option list (colours, sizes, materials, styles, fitment, ...).
+        // Attributes with an option list (colours, sizes, materials, styles, compatibility, ...).
         $attrSelect = $connection->select()
             ->from(['a' => $this->resource->getTableName('eav_attribute')], ['attribute_id', 'attribute_code', 'frontend_label'])
             ->join(
@@ -223,7 +223,7 @@ class ThesaurusGenerator
         return <<<PROMPT
 You are an e-commerce search relevance expert building a synonym thesaurus for a Magento storefront.
 
-Below is the store's actual searchable vocabulary scraped from its own content: option labels grouped by attribute (colours, sizes, materials, styles, fitment, etc.), category names, and a sample of real product names. These are the exact terms and phrasings the catalogue uses.
+Below is the store's actual searchable vocabulary scraped from its own content: option labels grouped by attribute (colours, sizes, materials, styles, compatibility, etc.), category names, and a sample of real product names. These are the exact terms and phrasings the catalogue uses.
 
 VOCABULARY:
 {$vocabJson}
