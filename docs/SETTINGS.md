@@ -73,8 +73,8 @@ lower-case,     add synonym        per candidate: prefix +     phrase & all-term
 strip stop  ─▶  variants       ─▶  words + phrase across   ─▶  boosts, then the    ─▶  your custom
 words           (equal weight)     weighted fields, with       in-stock nudge          ranking tie-
                                    Operator & Typo rules                               breaker
-"the front  →   + "frontend",      name^5 sku^6 …              ×4 phrase               _score →
- end"           "sxs","utv"                                    ×1.6 in-stock           bestseller
+"hoodie"    →   + "hoody",          name^5 sku^6 …              ×4 phrase               _score →
+                "pullover"                                     ×1.6 in-stock           bestseller
 ```
 
 **Mental model:** stages 1–2 decide *what counts as the query*, stage 3 decides *what matches*, and
@@ -103,9 +103,9 @@ How multiple typed words combine — **the single biggest lever on "too many vs.
 | **Most** | 75% of words must match. Balanced. | 3+ word queries; a good middle ground. |
 | **All** | AND — every word must match. Strictest, most precise. | Loosely-related items are leaking in. |
 
-**Worked example — query `Frontend UTV`:**
-- **Any** → anything that says *frontend* **or** *UTV* — generic frontend parts leak in.
-- **All** → only products matching *frontend* **and** *UTV* — the intended UTV front-end parts.
+**Worked example — query `Leather Crossbody`:**
+- **Any** → anything that says *leather* **or** *crossbody* — generic leather items leak in.
+- **All** → only products matching *leather* **and** *crossbody* — the intended leather crossbody bags.
 
 Terms may be spread across name, keywords *and* description (cross-field) — "All" doesn't force every
 word into one field.
@@ -149,15 +149,15 @@ One equivalence group per line, comma-separated. A search for *any* term in a gr
 others — scored **identically**, so `frontend` and `front end` return the same results in the same order.
 
 ```
-sxs, utv
+sneaker, trainer, kicks
 a-arm, a arm, control arm, control-arm
 shock, damper, coilover
 ```
 
-> **Keep terms distinctive.** A group term that is a common catalogue word (e.g. "side" inside "side
-> by side") over-broadens every query that expands to it, because synonym equivalents match at full
+> **Keep terms distinctive.** A group term that is a common catalogue word (e.g. "top" inside "high
+> top") over-broadens every query that expands to it, because synonym equivalents match at full
 > strength. Put buyer *phrases* that contain common words into the **AI Search Keywords** layer
-> instead — that's why `sxs, utv` lives here but "side by side" does not.
+> instead — that's why `sneaker, trainer` lives here but "high top" does not.
 
 Multi-word terms work: substitution is phrase-level, so `a-arm` ⇄ `control arm` (joining/splitting
 words) is fine. No thesaurus yet? Generate one from your catalogue — see [AI Assistant](#3-ai-assistant).
@@ -228,7 +228,7 @@ Products missing the attribute sort last — they're never dropped.
 Turns on searching a hidden, AI-generated per-product keyword field (`fm_search_keywords`). It lets a
 product surface for terms its own copy never uses.
 
-**Example:** a UTV part with no "side-by-side" text still ranks for `side-by-side` / `SxS` because
+**Example:** a hooded sweatshirt with no "pullover" text still ranks for `pullover` / `hoody` because
 those buyer terms were generated into its keyword field.
 
 > **Two steps to go live:** (1) populate the field off the request path with
@@ -238,7 +238,7 @@ those buyer terms were generated into its keyword field.
 | Companion | Path | Notes |
 |---|---|---|
 | **Weight** | `fastmagento/search/search_keywords_weight` | How strongly keyword hits rank (default `8`; name defaults to 5). Only used when the layer is on. |
-| **Source attrs** | `fastmagento/search/keyword_source_attributes` | Attribute codes whose labels give the generator context (e.g. `part_type,make,model`). Blank = reuse Facet Attributes. *(Global only.)* |
+| **Source attrs** | `fastmagento/search/keyword_source_attributes` | Attribute codes whose labels give the generator context (e.g. `product_type,brand,style`). Blank = reuse Facet Attributes. *(Global only.)* |
 
 ---
 
@@ -319,7 +319,7 @@ A comma-separated list of your highest-traffic search terms. The scheduled `fast
 cron pre-renders these result pages so the first real shopper hits a warm cache instead of a cold render.
 
 ```
-a-arm, rock slider, light bar, rzr cage, tie rod
+tee, hoodie, crossbody bag, puffer jacket, sneakers
 ```
 
 Keep the list short and genuinely popular — warming rarely-used terms just wastes cache.

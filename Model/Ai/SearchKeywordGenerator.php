@@ -20,8 +20,8 @@ use ParkkTech\FastMagento\Setup\Patch\Data\AddSearchKeywordsAttribute;
  *
  * For a batch of products it sends each product's name + key attribute labels + a short
  * description snippet to the model and asks for a compact, comma-separated list of buyer-facing
- * search terms and platform aliases (UTV side-by-side SxS, "front end" frontend, brand /
- * fitment nicknames). The terms are written straight to `fm_search_keywords` via the product
+ * search terms and aliases ("tee" t-shirt, everyday nicknames, brand / compatibility
+ * shorthand, misspellings). The terms are written straight to `fm_search_keywords` via the product
  * resource action (a bulk attribute UPDATE, no full product save), so the native fulltext
  * indexer then makes them searchable and InstantSearch ranks them (see RelevanceConfig).
  *
@@ -305,26 +305,26 @@ class SearchKeywordGenerator
         $max = self::MAX_TERMS_PER_PRODUCT;
 
         return <<<PROMPT
-You are an e-commerce search expert building a hidden keyword/synonym layer for an off-road /
-powersports parts and apparel catalogue on Magento. For each product below you get its id, name,
-selected attribute labels, and a short description.
+You are an e-commerce search expert building a hidden keyword/synonym layer for a Magento
+catalogue. For each product below you get its id, name, selected attribute labels, and a short
+description. Infer the store's domain and vocabulary from the product data itself.
 
 PRODUCTS:
 {$json}
 
 For EACH product, produce a compact, comma-separated list of the search terms a real shopper
 would type to find THIS product but that may not appear verbatim in its name/description. Include:
-- Platform / vehicle aliases and abbreviations (UTV side-by-side SxS side by side;
-  ATV four-wheeler / quad; dirt bike moto).
-- Part-type nicknames and everyday phrasings ("front end" frontend, "a-arm" control arm,
-  light bar LED bar, skid plate belly pan).
-- Fitment / brand / model nicknames actually used by buyers (e.g. RZR, Ranger, Maverick, Talon,
-  Can-Am canam, Polaris, "turbo s").
+- Category and product-type aliases and abbreviations shoppers actually use for THIS kind of
+  product ("tee" for t-shirt, "hoodie" for hooded sweatshirt, "sneakers" trainers).
+- Everyday phrasings and nicknames for the product type ("puffer" quilted jacket,
+  "crossbody" shoulder bag).
+- Brand / model / compatibility nicknames actually used by buyers, inferred from the product
+  data itself — never invented from outside knowledge of some other catalogue.
 - Common misspellings and singular/plural or hyphenation variants.
 
 RULES:
-- Terms describe what the product IS or FITS — never unrelated categories. Do not add "seats" to a
-  suspension part just because both are UTV parts.
+- Terms describe what the product IS or is FOR — never unrelated categories. Do not add "shoes"
+  to a handbag just because both are accessories.
 - All terms lowercase. Single words or short 2-3 word phrases. No duplicates. No term that merely
   repeats a word already in the product name.
 - At most {$max} terms per product; fewer is fine. If a product genuinely needs no extra terms,
@@ -400,7 +400,7 @@ PROMPT;
 
     /**
      * Configured context attribute codes: the dedicated setting, or the facet attributes as a
-     * sensible fallback (they already describe the product: part_type, fitment, etc.). Raw — may
+     * sensible fallback (they already describe the product: type, material, compatibility, etc.). Raw — may
      * contain codes that do not exist on this catalogue; see resolveSourceAttributes().
      *
      * @return string[]
