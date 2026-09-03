@@ -16,6 +16,15 @@ class OpenSearchPdpFetcher
     private $logger;
     private $productIndexer;
 
+    /**
+     * Per-request memo of docs already fetched, entity_id => _source|null (null = known miss).
+     * A PDP render asks for the same product from several plugins (repository, parent resolver,
+     * link collection) and each ask was a fresh round-trip; the doc cannot change mid-request.
+     *
+     * @var array<int, array|null>
+     */
+    private array $memo = [];
+
     public function __construct(
         ClientResolver $clientResolver,
         EngineResolverInterface $engineResolver,
@@ -41,6 +50,20 @@ class OpenSearchPdpFetcher
         if (!$ids) {
             return $out;
         }
+        $missing = [];
+        foreach ($ids as $id) {
+            if (array_key_exists($id, $this->memo)) {
+                if ($this->memo[$id] !== null) {
+                    $out[$id] = $this->memo[$id];
+                }
+            } else {
+                $missing[] = $id;
+            }
+        }
+        if (!$missing) {
+            return $out;
+        }
+        $ids = $missing;
         try {
             $engine = $this->engineResolver->getCurrentSearchEngine();
             $searchClient = $this->clientResolver->create($engine);
@@ -50,8 +73,12 @@ class OpenSearchPdpFetcher
                 'body' => ['ids' => array_map('strval', $ids)],
             ]);
             foreach ($resp['docs'] ?? [] as $doc) {
+                $docId = (int) ($doc['_id'] ?? 0);
                 if (!empty($doc['found']) && isset($doc['_source'])) {
-                    $out[(int) $doc['_id']] = $doc['_source'];
+                    $out[$docId] = $doc['_source'];
+                    $this->memo[$docId] = $doc['_source'];
+                } elseif ($docId) {
+                    $this->memo[$docId] = null;
                 }
             }
         } catch (\Exception $e) {
@@ -69,6 +96,9 @@ class OpenSearchPdpFetcher
      */
     public function fetchPdpById(int $id): ?array
     {
+        if (array_key_exists($id, $this->memo)) {
+            return $this->memo[$id];
+        }
         try {
             // 1) get the engine code from admin config
             $engine = $this->engineResolver->getCurrentSearchEngine();
@@ -83,8 +113,10 @@ class OpenSearchPdpFetcher
             ];
             $resp = $searchClient->getOpenSearchClient()->get($params);
             if (isset($resp['_source'])) {
+                $this->memo[$id] = $resp['_source'];
                 return $resp['_source'];
             }
+            $this->memo[$id] = null; // a confirmed miss is memoised too; an exception is not (transient)
         } catch (\Exception $e) {
             $this->logger->error('OpenSearchPdpFetcher error: ' . $e->getMessage());
         }
