@@ -47,9 +47,14 @@ class Uninstall implements UninstallInterface
                 $connection->delete($setup->getTable('mview_state'), ['view_id = ?' => $indexerId]);
             }
             $connection->delete($setup->getTable('cron_schedule'), ['job_code LIKE ?' => self::CRON_JOB_PREFIX . '%']);
-            // Companion modules (personalisation, checkout) keep their settings under the same
-            // prefix and cannot run without this module, so their configuration goes too.
-            $connection->delete($setup->getTable('core_config_data'), ['path LIKE ?' => 'fastmagento/%']);
+            // Only this module's own settings. Companion modules (personalisation, checkout) keep
+            // theirs under fastmagento/<companion>/ and remove them in their own Uninstall —
+            // Magento uninstalls dependents first, so theirs has already run by now.
+            $where = $connection->quoteInto('path LIKE ?', 'fastmagento/%');
+            foreach (['fastmagento/personalization/%', 'fastmagento/event/%', 'fastmagento/checkout/%'] as $companion) {
+                $where .= ' AND ' . $connection->quoteInto('path NOT LIKE ?', $companion);
+            }
+            $connection->delete($setup->getTable('core_config_data'), $where);
             $connection->delete($setup->getTable('flag'), ['flag_code LIKE ?' => 'fastmagento_%']);
             // Magento reverts and forgets DATA patches on uninstall but never SCHEMA patches, so
             // without this the schedule-mode patch would be skipped on a reinstall and the

@@ -76,11 +76,46 @@ class ListingHydrator
         try {
             $ids = $this->resolvePageIds($collection);
             if (!$ids) {
-                // No rows for this page. Let the native path produce the empty collection so the
-                // "no products" messaging and any third-party after-load logic behave normally.
                 return false;
             }
+            return $this->fill($collection, $ids, $this->mustFilterInStock);
+        } catch (\Throwable $e) {
+            $this->logger->error('[FastMagento] PLP hydration failed, using native EAV: ' . $e->getMessage());
+            return false;
+        }
+    }
 
+    /**
+     * Hydrate a collection from the index for ids the CALLER has already resolved (widget and
+     * slider collections, whose ids come from CategoryWidgetServer). $filterInStock says whether
+     * the native query would have hidden out-of-stock products, so the documents' is_in_stock
+     * is applied the same way. Same all-or-nothing contract as hydrate(): FALSE means "not
+     * touched, run the native load".
+     *
+     * @param int[] $ids
+     */
+    public function hydrateWithIds(ProductCollection $collection, array $ids, bool $filterInStock): bool
+    {
+        try {
+            $ids = array_values(array_unique(array_map('intval', $ids)));
+            if (!$ids) {
+                return false;
+            }
+            return $this->fill($collection, $ids, $filterInStock);
+        } catch (\Throwable $e) {
+            $this->logger->error('[FastMagento] widget hydration failed, using native EAV: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Fetch the documents for $ids, apply the owed stock filter, build shell products and put
+     * them into the collection. FALSE = index cannot answer for this page, leave it native.
+     *
+     * @param int[] $ids
+     */
+    private function fill(ProductCollection $collection, array $ids, bool $mustFilterInStock): bool
+    {
             $docs = $this->fetcher->fetchByIds($ids);
 
             // All-or-nothing: a single missing doc means the index is behind the catalogue, and a
@@ -111,7 +146,7 @@ class ListingHydrator
             // all-or-nothing check above matters: a product missing from the INDEX is an index
             // problem and must still fall back, whereas a product the index says is out of stock
             // is a real answer and simply does not belong on the page.
-            if ($this->mustFilterInStock) {
+            if ($mustFilterInStock) {
                 $inStock = [];
                 foreach ($ids as $id) {
                     $doc = $docs[$id] ?? null;
@@ -160,11 +195,6 @@ class ListingHydrator
             $collection->removeAttributeToSelect();
 
             return true;
-        } catch (\Throwable $e) {
-            $this->logger->error('[FastMagento] PLP hydration failed, using native EAV: ' . $e->getMessage());
-            $this->fallbackRecorder->record('hydration exception: ' . $e->getMessage());
-            return false;
-        }
     }
 
     /**
@@ -217,9 +247,26 @@ class ListingHydrator
     /**
      * The original SQL path: clone the collection's select and ask MySQL which ids are on the page.
      */
+    /**
+     * The ids the collection's own SELECT would return, as one index-only query (no e.*, no
+     * attribute loads): the parity-safe id source for widget collections, where MySQL's
+     * undefined order among equal sort keys cannot be reproduced by the search index.
+     *
+     * @return int[]
+     */
+    public function idsViaSql(ProductCollection $collection): array
+    {
+        return $this->fetchPageIdsViaSql($collection);
+    }
+
     private function fetchPageIdsViaSql(ProductCollection $collection): array
     {
         $select = clone $collection->getSelect();
+        // The EAV collection applies its page size inside _loadEntities(); a caller hooked
+        // before that point has to apply it here or the id list would be the whole category.
+        if (!$select->getPart(Select::LIMIT_COUNT) && (int) $collection->getPageSize() > 0) {
+            $select->limitPage(max(1, (int) $collection->getCurPage()), (int) $collection->getPageSize());
+        }
         $select->reset(Select::COLUMNS);
         $select->columns(['entity_id' => 'e.entity_id']);
 

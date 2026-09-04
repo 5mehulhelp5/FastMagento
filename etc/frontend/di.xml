@@ -386,4 +386,10 @@
         <plugin name="fastmagento_swatches_from_index"
                 type="ParkkTech\FastMagento\Plugin\Swatches\SwatchesFromIndexPlugin" sortOrder="10"/>
     </type>
+    <!-- Category widget / slider collections (CMS widgets, Hyvä ProductList) served from the indexes:
+         ids from Magento's own search index, products from the FastMagento documents. -->
+    <type name="Magento\Catalog\Model\ResourceModel\Product\Collection">
+        <plugin name="fastmagento_widget_collection_from_index"
+                type="ParkkTech\FastMagento\Plugin\WidgetProductCollectionPlugin" sortOrder="20"/>
+    </type>
 </config>

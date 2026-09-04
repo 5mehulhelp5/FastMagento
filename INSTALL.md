@@ -186,10 +186,12 @@ The `fm_search_keywords` table does not exist until the generator has run at lea
 
 ## 7. Cron
 
-**Cron must be running before you enable serving.** A fresh install leaves the four indexers
-invalid and Magento's `indexer_reindex_all_invalid` cron job builds them; on a large catalogue
-that first build runs for hours inside the cron process — plan it (or run
-`bin/magento indexer:reindex` yourself in a screen session) rather than discovering it.
+**Build the indexes before you enable serving.** A fresh install leaves the four indexers
+invalid. Either run the build yourself — `bin/magento indexer:reindex fastmagento_product
+fastmagento_category fastmagento_attribute_option fastmagento_review` (in a screen/tmux session
+on a large catalogue: it runs for hours there) — or let Magento's `indexer_reindex_all_invalid`
+cron job pick them up on its next run, which then does that same full build inside the cron
+process. Both work; just know which one you chose.
 
 `etc/crontab.xml` adds: a cache-warmup job (hourly), an existing maintenance job (every
 30 min), and an efficiency scan (config-gated by `fastmagento/efficiency/cron_enabled`,

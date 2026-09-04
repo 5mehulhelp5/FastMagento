@@ -78,6 +78,13 @@
                 <cache_filterable_attributes>1</cache_filterable_attributes>
                 <!-- Swatch type/value per option from the attribute-option dictionary. -->
                 <serve_swatches>1</serve_swatches>
+                <!-- "Products of category N" widget/slider collections: ids from Magento's own
+                     search index, products from the FastMagento documents. Strict shape match;
+                     anything else stays on MySQL. -->
+                <serve_widget_collections>1</serve_widget_collections>
+                <!-- sql = ids from one index-only query (byte-identical, including MySQL's order
+                     among equal prices/positions); index = ids from Magento's search index. -->
+                <widget_ids_source>sql</widget_ids_source>
             </serving>
             <plp>
                 <!--

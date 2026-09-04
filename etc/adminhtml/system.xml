@@ -138,6 +138,17 @@
                     <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
                     <comment><![CDATA[Swatch type and colour/image/text value per option from the attribute-option dictionary instead of <code>eav_attribute_option_swatch</code>. An option the dictionary does not know falls back to the query.]]></comment>
                 </field>
+                <field id="serve_widget_collections" translate="label comment" type="select" sortOrder="84" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Serve Category Widgets And Sliders From The Index</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment><![CDATA["Products of category N" collections behind CMS product widgets and theme sliders (home-page featured/new blocks, Hyvä product sliders) are answered from the indexes: the product ids come from Magento's own search index (category membership, position and price exactly as the SQL index tables hold them), the products from the FastMagento documents. Only the standard shape is served &mdash; one category, visibility list, position/price/no sort, a limit; anything else stays on the database.]]></comment>
+                </field>
+                <field id="widget_ids_source" translate="label comment" type="select" sortOrder="85" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Widget Product Ids Come From</label>
+                    <source_model>ParkkTech\FastMagento\Model\Config\Source\WidgetIdsSource</source_model>
+                    <comment><![CDATA[<strong>Database</strong> (default): the list of product ids comes from one index-only query built from the widget's own SQL, so the page is byte-identical to native &mdash; including the order MySQL happens to pick among products with the same price or position, which nothing else can reproduce. Everything about the products still comes from the index. <strong>Search index</strong>: the ids come from Magento's search index as well, so the widget touches the database not at all; products with equal sort keys are ordered by product id, which can differ from the database's order.]]></comment>
+                    <depends><field id="serve_widget_collections">1</field></depends>
+                </field>
             </group>
 
             <group id="plp" translate="label" sortOrder="15" showInDefault="1" showInWebsite="1" showInStore="1">
