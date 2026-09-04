@@ -96,6 +96,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Repeated OpenSearch round-trips for the same product within one request.** The PDP fetch
   helper now memoises documents per request (7 single-document GETs per product page became 2).
 
+## [2.7.2] - 2026-09-02
+
+### Fixed
+- Two cron jobs (`fastmagento_cache_warmup`, `fastmagento_efficiency_scan`) failed on every install; both now run.
+
+## [2.7.1] - 2026-09-02
+
+### Fixed
+- Grouped and bundle products served from the index reported out of stock and could not be added to the cart.
+
+### Docs / housekeeping
+- README: images under `assets/`, no links into untracked `docs/`, personalisation named as the companion package.
+- `docs/` and `.planning/` kept out of the repository.
+
+## [2.7.0] - 2026-09-02
+
+### Added
+- **Extension seams for companion modules**: a doctor check-provider pool (companions add `CheckProviderInterface` implementations; core ships none), search-stack interfaces (decorator, exploration, event recorder) with no-op defaults, `LinkProductCollectionPlugin::orderForDisplay()`, and the configurable default-values null filter. Additive only — a store without a companion behaves as 2.6.1. This is the release the FastMagento Personalisation package builds on.
+
+### Changed
+- AI prompts and docs are catalogue-generic (the vehicle-fitment framing is gone).
+
 ## [2.6.1]
 
 ### Fixed
@@ -108,6 +130,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   storefront hit this: core `get()` ignores the return value of `$product->load()`
   and `FrontendProductPlugin::aroundLoad` returned a shell without hydrating the
   subject. `aroundGet` now resolves the id and routes through `getById()`.
+
+## [2.6.0] - 2026-08-20
+
+### Performance
+- Listing page ids taken from the search answer instead of re-querying for them.
+- Listing special-price badges computed from the indexed prices.
+- Category attribute values filled from the index instead of the EAV UNION.
+- Category child lookups answered from the indexed tree.
+- Served stock status built from the document instead of a query.
+- The cart's absent-product check answered from the index.
+- A product page no longer fetches the same review data three times; three more repeats removed from the render path.
+- A served link collection reports its size instead of counting the database.
+- The storefront is warmed over HTTP after a cache flush.
+
+### Added
+- A saved category is pushed into OpenSearch immediately, like products already were.
+
+### Fixed
+- The product index is refreshed after an instant update so search sees it.
+
+## [2.5.1] - 2026-08-19
+
+### Fixed
+- Configurable price substitution is self-sufficient: no stock SQL when the registry misses.
+
+## [2.5.0] - 2026-08-19
+
+## What's Changed
+* docs: roadmap for the Algolia-parity layer, centred on fitment-aware curation by @parkktech in https://github.com/parkktech/FastMagento/pull/14
 
 ## [2.4.1]
 
