@@ -65,10 +65,11 @@ bin/magento setup:upgrade
 bin/magento setup:di:compile        # production mode only
 bin/magento cache:flush
 
-# All THREE indexers. The attribute-option dictionary is what facet labels are resolved from —
-# skip it and every attribute facet silently disappears. setup:upgrade marks all three invalid
-# for you, so cron will also build them on its own.
-bin/magento indexer:reindex fastmagento_product fastmagento_category fastmagento_attribute_option
+# All FOUR indexers. The attribute-option dictionary is what facet labels and swatches are resolved
+# from — skip it and every attribute facet silently disappears. setup:upgrade marks all four invalid
+# for you, so cron will also build them on its own (on a large catalogue that first cron run IS the
+# full build — run this yourself in a screen session instead if you want to watch it).
+bin/magento indexer:reindex fastmagento_product fastmagento_category fastmagento_attribute_option fastmagento_review
 
 # Confirm it is actually serving (cluster, indices, indexers, cron, facets, theme, checkout)
 bin/magento fastmagento:doctor
@@ -134,7 +135,9 @@ What it covers, and the real failure each check exists for:
 | **Index prefix** | the default `magento2` prefix shared with another install — two stores silently overwriting each other's indices |
 | **Indices + doc counts** | an index missing or holding far fewer docs than the catalogue (the signature of documents rejected during bulk while the reindex still reported success) |
 | **Mapping headroom** | approaching `total_fields.limit`, before it starts dropping products |
-| **Indexers** | any of the three missing, invalid, or left on *Update on Save* |
+| **Indexers** | any of the four missing, invalid, or left on *Update on Save* |
+| **Product URL routing** | the product index built before 2.8.1 (no `request_path` keyword field) — product URLs still resolving in MySQL until the next reindex |
+| **Review index** | missing or empty while approved reviews exist |
 | **Cron** | no recent `indexer_update_all_views` success — scheduled indexes silently going stale |
 | **Facets** | configured attributes that Magento will not aggregate, and an unbuilt option dictionary (which drops every attribute facet) |
 | **Listing** | whether the PLP is served from OpenSearch, and whether another module has re-pointed the collection virtual type |
@@ -456,7 +459,11 @@ you came for:
 | Feature | What it fixes |
 |---|---|
 | 📦 [OpenSearch product serving (PHP loads from OS)](#feature-opensearch-product-serving-zero-eav-reads) | 0 product/EAV SQL on PDP, cart, listings |
-| 🗂️ [Category & navigation serving](#feature-category--navigation-serving) | 0 category EAV reads for menu / breadcrumbs / nav |
+| 🗂️ [Category & navigation serving](#feature-category--navigation-serving) | 0 category EAV reads for menu / breadcrumbs / nav / the current category itself |
+| 🧭 [URL routing from the index](#feature-url-routing-from-the-index) | `url_rewrite` lookups on every request |
+| ⭐ [Product reviews from the index](#feature-product-reviews-from-the-index) | review list + per-review rating N+1 on every PDP |
+| 🧱 [Category widgets & sliders](#feature-related-up-sell-cross-sell--product-sliders) | home-page "featured/new" collections loaded from EAV |
+| 🧊 [Render-time caches](#feature-render-time-caches) | menu ESI round-trip under Varnish, layered-nav / section-data / rating-set / attribute-list renders |
 | 🔗 [Related, up-sell, cross-sell & sliders](#feature-related-up-sell-cross-sell--product-sliders) | per-item EAV + URL-rewrite N+1 |
 | 🧩 [All product types served](#feature-all-product-types-served) | simple, configurable, downloadable, virtual |
 | ⌨️ [Autocomplete search (as-you-type)](#feature-autocomplete-search-as-you-type-dropdown) | slow native autocomplete |
@@ -498,8 +505,53 @@ request-scoped provider pulls it in **one** search and answers the mega-menu, to
 breadcrumbs and layered-navigation **category data** from memory — eliminating the
 `catalog_category_entity_{varchar,int,text}` UNION attribute loads (**0 category EAV reads**). A
 batched URL finder collapses the per-category `url_rewrite` N+1 (~108 queries → one per store).
-*(The category page's product grid still renders natively today; the search results page is the
-fully OS-served, live listing — server-side OS-serving of the category grid is on the roadmap.)*
+
+Since 2.8.1 the **current category itself** comes from the same document on the storefront:
+`CategoryRepository::get()` (the category controller and the layer), the breadcrumb walk
+(`getParentCategories`), the design walk (`getParentDesignCategory`) and the child list
+(`getChildrenCategories`) are built from the indexed document — the entity load, the exists-check,
+two EAV collection loads and a `url_rewrite` join per category and search page. Storefront only;
+admin, API and GraphQL keep the database, and a category the index does not hold falls through.
+The category page's product grid is served from the index as well (listing hydration, 2.x).
+
+Under **Varnish**, Magento turns the menu block into an ESI include, which costs a *second* Magento
+bootstrap, routing pass and web-server hop on every cache miss. FastMagento renders the menu inline
+instead (block names configurable; defaults cover Luma/Breeze `catalog.topnav` and Hyvä
+`topmenu_generic`), so a miss is one backend request. *Serving → Render The Category Menu Inline.*
+
+## Feature: URL routing from the index
+
+The URL-rewrite router's request-path lookup — two or three `url_rewrite` queries on **every**
+request — is answered from the category tree or one term query on the product index
+(`request_path` is a keyword field since 2.8.1; reindex `fastmagento_product` once). Only current
+canonical paths are answered: old paths that 301, CMS pages, product-in-category paths and custom
+rewrites still come from `url_rewrite`, so redirects keep working. The router's follow-up lookup of
+the resolved system path is answered without a query. *Serving → Resolve Product And Category URLs
+From The Index.*
+
+## Feature: Product reviews from the index
+
+A dedicated `fastmagento_review` indexer (2.8.0) projects every approved review, with its rating
+votes, into its own index — one document per review, so a popular product's thousand reviews never
+ride along on the product document, and a review save touches one document plus the two summary
+fields on its product (which also keeps `reviews_count` / `rating_summary` on product cards current;
+before 2.8.0 no mview subscription covered the review tables). The product page's review list, its
+pager total and every review's stars come from **one** search instead of a COUNT, a SELECT and one
+`rating_option_vote` query per review shown — on Hyvä, Luma and Breeze (whose list loads through
+`review/product/listAjax`) alike. The review form's rating set is cached per store, invalidated on
+rating save. Net: **a product page runs no review or rating query at all.** The full build streams
+the review table by keyset in fixed pages, so memory is flat at any review count. *Serving → Serve
+Product Reviews From The Index.*
+
+## Feature: Render-time caches
+
+Once the data comes from the index, what an uncached page still costs is template time. Four
+blocks whose output does not vary per visitor are block-cached with the right keys (2.8.0–2.8.1):
+the layered navigation HTML (per category / search query, applied filters, store, currency and
+customer group — filters are still applied to the product collection, only the rendering is
+cached), Hyvä's default-section-data script (per store and currency), the review form's rating set
+and the layer's filterable-attribute list (both per store, cleaned on attribute / rating save).
+Each has its own Serving toggle and lifetime where relevant.
 
 ## Feature: Related, up-sell, cross-sell & product sliders
 
@@ -511,6 +563,19 @@ sliders quietly expensive on every page.
 On a product page that is the difference between **20 and 3 product queries cold** (2 warm): the
 related block is the single most expensive thing left on a PDP once the product itself comes from
 the index.
+
+**Category widgets and sliders (2.9.0).** "Products of category N" collections — CMS product
+widgets, Hyvä product sliders, featured/new home-page blocks — are plain product collections the
+listing hydrator never saw. A strict recogniser reads the collection's SELECT (one
+`catalog_category_product_index` join, visibility list, optional `is_parent`, the standard
+website/stock/review/price joins, an optional base-price range, position / price / no sort, a page
+size) and fills the collection from the index instead of the `e.*` load plus the EAV attribute
+passes. Two id sources: **Database** (default) takes the ids from one index-only query built from
+the widget's own SQL, so the page is byte-identical to native — including the order MySQL happens to
+pick among products with the *same* price or position, which nothing else can reproduce; **Search
+index** takes them from Magento's own search index too (no MySQL for the widget at all; ties ordered
+by product id). Anything outside the shape stays native. *Serving → Serve Category Widgets And
+Sliders From The Index / Widget Product Ids Come From.*
 
 ## Feature: All product types served
 
@@ -742,6 +807,12 @@ path.)*
 | `OpenSearchStockRegistry` + indexed `stock_item` | Stock item / status on PDP and cart | per-product `cataloginventory_stock_item` loads; per-line `WHERE sku=?` MSI preload |
 | Indexed `parent_ids` + `ParentIdResolver` | Child→parent resolution for sliders / widgets | `catalog_product_super_link` / `catalog_product_link` parent N+1 |
 | Indexed `swatch_options` + `configurable_options_<id>` | PDP swatch `jsonConfig` | `eav_attribute_option` / `_value` / `_swatch` per-option lookups |
+| Option dictionary carrying each option's swatch (2.8.1) | `Swatches\Helper\Data::getSwatchesByOptionsId` for layered nav and every swatch renderer | `eav_attribute_option_swatch` per page |
+| Indexed category document → `CategoryModelBuilder` (2.8.1) | The current category, breadcrumb trail, design ancestor, child list | category entity load + exists-check + two EAV collection loads + `url_rewrite` join per category/search page |
+| Category tree + `request_path` keyword on the product index (2.8.1) | The URL-rewrite router's request-path lookup | 2–3 `url_rewrite` queries on every request |
+| Review index (2.8.0) + cached rating set | PDP review list, pager total, per-review stars, review form ratings | review SELECT + COUNT + one `rating_option_vote` per review + 3 rating queries |
+| Cached filterable-attribute list (2.8.1) | The layer's attribute list on every listing/search | `eav_attribute` ⋈ `catalog_eav_attribute` load per page |
+| Category widget server (2.9.0) | CMS product widgets and theme sliders | full `e.*` collection load + attribute passes (ids from one index-only query, or from the search index) |
 | Indexed downloadable links / samples | Downloadable PDP blocks | `downloadable_link` / `downloadable_sample` loads |
 | OS-served quote-item collection (Fast Checkout) | Cart / checkout line hydration | the native ~217-query `_assignProducts` build (EAV ≈119 + MSI stock ≈71 + downloadable ≈27) |
 | Search relevance + facets from the native fulltext index | Instant search results + live layered nav | the layered-navigation attribute/option SQL and category/EAV reads behind native search |
@@ -960,11 +1031,28 @@ bin/magento setup:upgrade
 bin/magento cache:flush
 ```
 
-Then build the indexes:
+Then build the indexes (all four):
 ```bash
-bin/magento indexer:reindex fastmagento_product
-bin/magento indexer:reindex fastmagento_category
+bin/magento indexer:reindex fastmagento_product fastmagento_category fastmagento_attribute_option fastmagento_review
 ```
+
+**Upgrading to 2.8+** — reindex once after `setup:upgrade`: `fastmagento_product` (the product
+index gains the `request_path` keyword field URL routing needs; the doctor reports until it is
+there), `fastmagento_attribute_option` (options now carry their swatch), and the new
+`fastmagento_review`. Put `fastmagento_review` in schedule mode like the other three.
+
+**After any composer change** on a production box, reload PHP-FPM (or call `opcache_reset()`)
+once `setup:di:compile` / `setup:upgrade` / `cache:flush` are done: workers otherwise keep the old
+composer autoload and return 500s until opcache revalidates — and Varnish then marks the backend
+sick for its probe window.
+
+**Uninstall** — `bin/magento module:uninstall --remove-data ParkkTech_FastMagento` runs the
+module's `Setup/Uninstall` (2.8.1): it deletes the four OpenSearch serving indices, the mview
+changelog tables, indexer/mview state, cron schedule rows, flags and the module's settings.
+Uninstall companion modules (personalisation, checkout) first. Magento then tries to `composer
+remove` with its own embedded composer, which has no `auth.json`; on a project with private or VCS
+repositories that step fails with "Could not authenticate against github.com" — finish with
+`composer remove parkktech/fastmagento` by hand. Details in [INSTALL.md](INSTALL.md).
 
 ---
 
@@ -982,6 +1070,25 @@ immediately after install.
 | Enable Cron Indexing | On | Let the `mview` cron flush pending changes on a schedule. |
 | Product Index Prefix | `products` | Index name prefix for the product serving index. |
 | Category Index Prefix | `categories` | Index name prefix for the category serving index. |
+| Review Index Suffix | `reviews` | Index name suffix for the review index (2.8.0). |
+
+### Serving
+
+Every switch below is on by default and falls back to the native path when the index cannot answer.
+
+| Setting | Default | What it does |
+|---|---|---|
+| Serve Stock Status / Category Tree / Category Attributes From The Index | On | The original serving switches (stock badge, category children, category EAV attributes). |
+| Serve Product Reviews From The Index | On | PDP review list, pager total and per-review stars from the review index (2.8.0). |
+| Render The Category Menu Inline Under Varnish (+ block names) | On | No ESI round-trip for the menu on a Varnish miss (2.8.0). |
+| Cache Hyvä Section Data Per Store | On | Block-caches `default-section-data` per store and currency (2.8.0). |
+| Cache Layered Navigation HTML (+ lifetime, block names) | On, 3600 s | Per category/query, filters, store, currency, group (2.8.0). |
+| Serve The Current Category From The Index | On | Category controller, breadcrumbs, design walk, child list from the document (2.8.1). |
+| Resolve Product And Category URLs From The Index | On | The router's request-path lookup; redirects and custom rewrites stay in `url_rewrite` (2.8.1). |
+| Cache The Layer's Filterable Attribute List | On | Per store and list class, cleaned on attribute save (2.8.1). |
+| Serve Swatches From The Index | On | Swatch type/value per option from the option dictionary (2.8.1). |
+| Serve Category Widgets And Sliders From The Index | On | CMS widgets and theme sliders of the "products of category N" shape (2.9.0). |
+| Widget Product Ids Come From | Database | *Database* = byte-identical order from one index-only id query; *Search index* = no MySQL, ties by product id (2.9.0). |
 
 ### Instant Search & Relevance
 
