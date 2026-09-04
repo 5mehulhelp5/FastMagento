@@ -157,8 +157,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.5.0] - 2026-08-19
 
-## What's Changed
-* docs: roadmap for the Algolia-parity layer, centred on fitment-aware curation by @parkktech in https://github.com/parkktech/FastMagento/pull/14
+### Docs
+- docs: roadmap for the Algolia-parity layer, centred on fitment-aware curation by @parkktech in https://github.com/parkktech/FastMagento/pull/14
 
 ## [2.4.1]
 
