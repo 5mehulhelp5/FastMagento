@@ -5,31 +5,38 @@ All notable changes to FastMagento are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.9.0] - 2026-09-04
 
 ### Added
 - **Category widgets and sliders from the index.** "Products of category N" collections (CMS
   product widgets, Hyvä product sliders, featured/new home-page blocks) are served without
-  MySQL: the ids come from Magento's own search index (category membership, per-category
-  position and per-group price as the SQL index tables hold them), the products from the
-  FastMagento documents. Strict shape recogniser — one category, a visibility list, position /
+  loading from EAV. Strict shape recogniser — one category, a visibility list, position /
   price / no sort, an optional base-price range, a limit; anything else stays native. Two id
   sources: *Database* (default) takes the ids from one index-only query built from the widget's
   own SQL, so the page is byte-identical to native including MySQL's undefined order among
   equal prices or positions; *Search index* takes them from Magento's search index (no MySQL at
-  all; ties ordered by product id). Serving > *Serve Category Widgets And Sliders From The
-  Index* / *Widget Product Ids Come From*.
+  all; ties ordered by product id). The products always come from the FastMagento documents.
+  Serving > *Serve Category Widgets And Sliders From The Index* / *Widget Product Ids Come From*.
+
+### Changed
+- `Setup/Uninstall` no longer removes companion modules' settings (`fastmagento/personalization/*`,
+  `fastmagento/event/*`, `fastmagento/checkout/*`); each companion's own Uninstall does that.
+- INSTALL.md leads with the manual `indexer:reindex` before the cron alternative.
+
+## [2.8.1] - 2026-09-03
+
+### Added
 - **`Setup/Uninstall`.** `module:uninstall --remove-data` now deletes the four OpenSearch
-  serving indices, the mview changelog tables, indexer/mview state rows, cron schedule rows and
-  every `fastmagento/*` setting. Previously all of it survived an uninstall.
-- **INSTALL.md**: four indexers (reviews), cron before serving on large catalogues, the
-  post-deploy FPM/opcache reload, and an uninstall section covering the embedded-composer
-  authentication failure.
+  serving indices, the mview changelog tables, indexer/mview state rows, cron schedule rows,
+  flags and the module's settings, and forgets its schema patches so a reinstall re-applies
+  them (Magento reverts data patches on uninstall but never schema patches — without this the
+  indexers came back in Update-on-Save mode). Previously all of it survived an uninstall.
+- **INSTALL.md**: four indexers (reviews), building the indexes before serving on large
+  catalogues, the post-deploy FPM/opcache reload, and an uninstall section covering the
+  embedded-composer authentication failure.
 
 ### Changed
 - `fastmagento/cache/warm_paths` defaults to `/` instead of empty.
-- `Setup/Uninstall` no longer removes companion modules' settings (`fastmagento/personalization/*`,
-  `fastmagento/event/*`, `fastmagento/checkout/*`); each companion's own Uninstall does that.
 
 ## [2.8.0] - 2026-09-03
 
