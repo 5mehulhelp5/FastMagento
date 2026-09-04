@@ -9,6 +9,7 @@ use Magento\Framework\App\ResourceConnection;
 use Magento\Framework\Search\EngineResolverInterface;
 use ParkkTech\FastMagento\Helper\OpenSearchConfig;
 use ParkkTech\FastMagento\Helper\WriteLog;
+use ParkkTech\FastMagento\Model\Db\EntityLink;
 use ParkkTech\FastMagento\Model\Indexer\ProductIndexer;
 
 /**
@@ -36,6 +37,7 @@ class CatalogRuleSyncer
     public function __construct(
         private readonly ProductIndexer $productIndexer,
         private readonly ResourceConnection $resource,
+        private readonly EntityLink $entityLink,
         private readonly WriteLog $writeLog,
         private readonly ClientResolver $clientResolver,
         private readonly EngineResolverInterface $engineResolver,
@@ -99,6 +101,14 @@ class CatalogRuleSyncer
      */
     private function patchAndReproject(array $ids): void
     {
+        // Before the first full reindex there is no product index. Writing now would let
+        // OpenSearch auto-create one with the cluster's default field limit (1000), which the
+        // real index creation then has to delete — and every doc bounced meanwhile logs a
+        // "Limit of total fields exceeded" error that has nothing to do with rule prices.
+        $client = $this->clientResolver->create($this->engineResolver->getCurrentSearchEngine());
+        if (!$client->indexExists($this->openSearchConfig->getIndexName())) {
+            return;
+        }
         $misses = $this->patchRulePriceDocs($ids);
         if ($misses) {
             try {
@@ -260,16 +270,20 @@ class CatalogRuleSyncer
     {
         $connection = $this->resource->getConnection();
         $parents = [];
-        $parents[] = $connection->fetchCol(
-            $connection->select()
-                ->from($this->resource->getTableName('catalog_product_super_link'), ['parent_id'])
-                ->where('product_id IN (?)', $childIds)
-        );
-        $parents[] = $connection->fetchCol(
-            $connection->select()
-                ->from($this->resource->getTableName('catalog_product_relation'), ['parent_id'])
-                ->where('child_id IN (?)', $childIds)
-        );
+        // parent_id holds the link field (row_id on Commerce); resolve it to the entity id.
+        $superLink = $connection->select()
+            ->from(['l' => $this->resource->getTableName('catalog_product_super_link')], []);
+        $parent = $this->entityLink->productEntityId($superLink, 'l', 'parent_id');
+        $superLink->columns(['parent_id' => new \Zend_Db_Expr($parent)])
+            ->where('l.product_id IN (?)', $childIds);
+        $parents[] = $connection->fetchCol($superLink);
+
+        $relation = $connection->select()
+            ->from(['r' => $this->resource->getTableName('catalog_product_relation')], []);
+        $parent = $this->entityLink->productEntityId($relation, 'r', 'parent_id');
+        $relation->columns(['parent_id' => new \Zend_Db_Expr($parent)])
+            ->where('r.child_id IN (?)', $childIds);
+        $parents[] = $connection->fetchCol($relation);
         return array_map('intval', array_merge(...$parents));
     }
 

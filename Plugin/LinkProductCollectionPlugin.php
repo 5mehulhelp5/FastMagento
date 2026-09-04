@@ -11,6 +11,7 @@ use Magento\Framework\DataObject;
 use ParkkTech\FastMagento\Helper\OpenSearchPdpFetcher;
 use ParkkTech\FastMagento\Helper\ShellProductBuilder;
 use ParkkTech\FastMagento\Helper\WriteLog;
+use ParkkTech\FastMagento\Model\Db\EntityLink;
 
 /**
  * Serve Related / Up-sell / Cross-sell (product-link) collections from OpenSearch.
@@ -55,6 +56,7 @@ class LinkProductCollectionPlugin
     public function __construct(
         private readonly State $appState,
         private readonly ResourceConnection $resource,
+        private readonly EntityLink $entityLink,
         private readonly OpenSearchPdpFetcher $fetcher,
         private readonly ShellProductBuilder $shellProductBuilder,
         private readonly WriteLog $writeLog
@@ -170,9 +172,9 @@ class LinkProductCollectionPlugin
      * product page costing ~20 product queries where a listing costs 1, with nothing failing.
      *
      * So fall back to the private `$productIds` the constructor filled. Those hold LINK FIELD
-     * values, which equal `entity_id` on Community but are `row_id` on Commerce with staging —
-     * and `catalog_product_link.product_id` is an entity_id. When the two differ we cannot safely
-     * translate here, so we return null and let the native load handle it.
+     * values, which equal `entity_id` on Open Source but are `row_id` on Commerce with staging.
+     * OpenSearch documents are keyed by entity id, so on Commerce the row id is resolved to its
+     * entity id with one primary-key lookup (no query on Open Source).
      *
      * @return int|null
      */
@@ -191,25 +193,31 @@ class LinkProductCollectionPlugin
             $property = new \ReflectionProperty(Collection::class, 'productIds');
             $property->setAccessible(true);
             $ids = $property->getValue($subject);
-
-            $linkField = \Closure::bind(
-                function () {
-                    return $this->getLinkField();
-                },
-                $subject,
-                Collection::class
-            )();
         } catch (\Throwable $e) {
             return null;
         }
 
-        if ($linkField !== 'entity_id' || !is_array($ids) || count($ids) !== 1) {
+        if (!is_array($ids) || count($ids) !== 1) {
             return null;
         }
 
         $parentId = (int) reset($ids);
+        if ($parentId <= 0) {
+            return null;
+        }
+        if (!$this->entityLink->isProductStaged()) {
+            return $parentId;
+        }
 
-        return $parentId > 0 ? $parentId : null;
+        // Commerce: $parentId is a row_id — map it to the entity id the index is keyed by.
+        $connection = $this->resource->getConnection();
+        $entityId = (int) $connection->fetchOne(
+            $connection->select()
+                ->from(['e' => $this->resource->getTableName('catalog_product_entity')], ['entity_id'])
+                ->where('e.' . $this->entityLink->productLinkField() . ' = ?', $parentId)
+        );
+
+        return $entityId > 0 ? $entityId : null;
     }
 
     /**
@@ -294,7 +302,10 @@ class LinkProductCollectionPlugin
     {
         $connection = $this->resource->getConnection();
         $select = $connection->select()
-            ->from(['l' => $this->resource->getTableName('catalog_product_link')], ['linked_product_id'])
+            ->from(['l' => $this->resource->getTableName('catalog_product_link')], ['linked_product_id']);
+        // l.product_id holds the link field (row_id on Commerce); match it by entity id.
+        $parent = $this->entityLink->productEntityId($select, 'l', 'product_id');
+        $select
             ->joinLeft(
                 ['la' => $this->resource->getTableName('catalog_product_link_attribute')],
                 'la.link_type_id = l.link_type_id AND la.product_link_attribute_code = ' . $connection->quote('position'),
@@ -305,7 +316,7 @@ class LinkProductCollectionPlugin
                 'ai.product_link_attribute_id = la.product_link_attribute_id AND ai.link_id = l.link_id',
                 ['position' => 'ai.value']
             )
-            ->where('l.product_id = ?', $parentId)
+            ->where($parent . ' = ?', $parentId)
             ->where('l.link_type_id = ?', $linkTypeId)
             ->order('position ' . \Magento\Framework\DB\Select::SQL_ASC)
             ->order('l.link_id ' . \Magento\Framework\DB\Select::SQL_ASC);

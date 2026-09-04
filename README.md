@@ -976,7 +976,8 @@ is described in this README it exists; if it is only listed here as ahead, it do
 
 ## Requirements
 
-- Magento 2.4.x (Open Source / Commerce), base install.
+- Magento 2.4.x — Open Source **and Adobe Commerce** (content-staging schema supported since 2.10.0, see
+  [Adobe Commerce compatibility](#adobe-commerce-ee-compatibility)), base install.
 - OpenSearch 1.x/2.x (the engine already configured under
   `Stores → Configuration → Catalog → Catalog Search`).
 - PHP matching your Magento version.
@@ -1296,7 +1297,50 @@ curl -s "http://localhost:9200/magento2_products/_mapping?pretty"
 
 ---
 
+## Adobe Commerce (EE) compatibility
+
+Adobe Commerce's content staging rewrites the catalogue schema: `catalog_product_entity` and
+`catalog_category_entity` gain a `row_id` key (one row per scheduled version), and every child
+table that referenced `entity_id` references `row_id` instead — the EAV value tables, tier
+prices, media gallery values, and the parent side of `catalog_product_super_link`,
+`catalog_product_relation`, `catalog_product_link`, bundle options/selections, custom options
+and super attributes. Since 2.10.0 every raw query in FastMagento that touches one of those
+tables goes through `Model\Db\EntityLink`, which reads the link field from Magento's
+`MetadataPool` and, on Commerce only, joins the entity table to translate `row_id` ⇄ `entity_id`.
+On Open Source the helper adds nothing: no join, the same SQL, the same query counts.
+
+What that means in practice:
+
+- **Documents are keyed by `entity_id` on both editions**, so an index built on Commerce looks
+  exactly like one built on Open Source (verified document-for-document, see below). The
+  currently active version of a product is what gets indexed; Commerce's own reindex triggers
+  pick up a scheduled version when it applies. Admin preview of a future date shows current data
+  on OpenSearch-served pages.
+- `bin/magento fastmagento:doctor` has a **Commerce** section: which schema edition the install
+  runs on, and warnings when **category permissions** or **B2B shared catalogs** are active —
+  OpenSearch-served listings and search do not apply those per-customer-group visibility rules
+  yet, so keep the serving flags off on the store views that depend on them.
+- **Textarea / WYSIWYG / Page Builder attributes** are mapped as analysed `text` under
+  `attributes.*` (option attributes stay `keyword`, with `ignore_above`), so a 100 KB size chart
+  can no longer reject a document with "immense term in field=attributes.<code>".
+
+How it was verified without a Commerce licence: an Open Source install is converted to the
+Commerce shape (`row_id`, `created_in`, `updated_in`, child tables re-keyed, `MetadataPool`
+link field `row_id`) with the scripts under `docs/tools/commerce-sim/` of the demo repo, Magento's
+own indexers are run on it, and every FastMagento index is diffed against the same catalogue
+indexed on the untouched Open Source install: **0 differing documents** across products,
+categories, attribute options, reviews and the native search index (the only extra fields on the
+Commerce side are the version columns Magento itself exposes on the product). A real Adobe
+Commerce install additionally applies its version filter to every select on a staged table,
+which is why the helper never filters on `created_in`/`updated_in` itself.
+
+---
+
 ## Known limitations / roadmap
+
+- **Adobe Commerce category permissions and B2B shared catalogs** are not applied by
+  OpenSearch-served listings and search (the doctor warns when they are active). Permission-aware
+  serving is the next Commerce milestone.
 
 - The **category page's product grid** still renders natively (MySQL); the fully OS-served, live
   product listing today is the **search results page**. OS-serving the category/PLP grid is the

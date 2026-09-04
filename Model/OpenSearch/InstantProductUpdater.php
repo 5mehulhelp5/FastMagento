@@ -11,6 +11,7 @@ use Magento\Framework\DataObject\IdentityInterface;
 use Magento\Framework\Event\ManagerInterface as EventManager;
 use ParkkTech\FastMagento\Helper\OpenSearchConfig;
 use ParkkTech\FastMagento\Helper\WriteLog;
+use ParkkTech\FastMagento\Model\Db\EntityLink;
 use ParkkTech\FastMagento\Model\Indexer\ProductIndexer;
 
 /**
@@ -34,6 +35,7 @@ class InstantProductUpdater
     public function __construct(
         private readonly ProductIndexer $productIndexer,
         private readonly ResourceConnection $resource,
+        private readonly EntityLink $entityLink,
         private readonly OpenSearchConfig $config,
         private readonly WriteLog $writeLog,
         private readonly EventManager $eventManager
@@ -147,16 +149,20 @@ class InstantProductUpdater
         $connection = $this->resource->getConnection();
         $parents = [];
 
-        $parents[] = $connection->fetchCol(
-            $connection->select()
-                ->from($this->resource->getTableName('catalog_product_super_link'), ['parent_id'])
-                ->where('product_id IN (?)', $childIds)
-        );
-        $parents[] = $connection->fetchCol(
-            $connection->select()
-                ->from($this->resource->getTableName('catalog_product_relation'), ['parent_id'])
-                ->where('child_id IN (?)', $childIds)
-        );
+        // parent_id holds the link field (row_id on Commerce); resolve it to the entity id.
+        $superLink = $connection->select()
+            ->from(['l' => $this->resource->getTableName('catalog_product_super_link')], []);
+        $parent = $this->entityLink->productEntityId($superLink, 'l', 'parent_id');
+        $superLink->columns(['parent_id' => new \Zend_Db_Expr($parent)])
+            ->where('l.product_id IN (?)', $childIds);
+        $parents[] = $connection->fetchCol($superLink);
+
+        $relation = $connection->select()
+            ->from(['r' => $this->resource->getTableName('catalog_product_relation')], []);
+        $parent = $this->entityLink->productEntityId($relation, 'r', 'parent_id');
+        $relation->columns(['parent_id' => new \Zend_Db_Expr($parent)])
+            ->where('r.child_id IN (?)', $childIds);
+        $parents[] = $connection->fetchCol($relation);
 
         return array_values(array_unique(array_map('intval', array_merge(...$parents))));
     }

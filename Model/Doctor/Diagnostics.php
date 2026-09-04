@@ -37,6 +37,7 @@ class Diagnostics
     private const G_PLP = 'Listing';
     private const G_LOCK = 'Locking';
     private const G_PHP = 'PHP';
+    private const G_COMMERCE = 'Commerce';
 
     public function __construct(
         private readonly ScopeConfigInterface $scopeConfig,
@@ -49,6 +50,7 @@ class Diagnostics
         private readonly OptionDictionary $optionDictionary,
         private readonly IndexSettings $indexSettings,
         private readonly \Magento\Framework\Module\Manager $moduleManager,
+        private readonly \ParkkTech\FastMagento\Model\Db\EntityLink $entityLink,
         private readonly \Magento\Framework\View\DesignInterface $design,
         private readonly \Magento\Store\Model\StoreManagerInterface $storeManager,
         private readonly \Magento\Framework\View\Design\Theme\ThemeProviderInterface $themeProvider,
@@ -117,6 +119,7 @@ class Diagnostics
         $checks = array_merge($checks, $this->checkPlp());
         $checks = array_merge($checks, $this->checkTheme());
         $checks = array_merge($checks, $this->checkCheckout());
+        $checks = array_merge($checks, $this->checkCommerce());
         $checks = array_merge($checks, $this->checkLocking());
         foreach ($this->checkProviders as $provider) {
             $checks = array_merge($checks, $provider->check());
@@ -655,6 +658,62 @@ class Diagnostics
                 'Set FastMagento > Instant Search & Relevance > Enable Instant Search Results to Yes '
                 . 'to serve the results page from OpenSearch.'
             );
+
+        return $out;
+    }
+
+    /**
+     * Adobe Commerce: the schema edition this install runs on, and the Commerce features whose
+     * visibility rules an OpenSearch-served page does not apply.
+     *
+     * @return Check[]
+     */
+    private function checkCommerce(): array
+    {
+        $out = [];
+        $out[] = Check::ok(
+            self::G_COMMERCE,
+            'Catalogue schema',
+            $this->entityLink->isProductStaged()
+                ? 'Adobe Commerce (content staging, link field row_id) — staged-table queries resolve through EntityLink'
+                : 'Open Source (link field entity_id)'
+        );
+
+        if ($this->moduleManager->isEnabled('Magento_Staging')) {
+            $out[] = Check::ok(
+                self::G_COMMERCE,
+                'Scheduled updates',
+                'The index holds the currently active version of each product; a version switch is picked up '
+                . 'by the reindex Commerce triggers when it applies. Admin preview of a future date shows '
+                . 'current data on OpenSearch-served pages.'
+            );
+        }
+
+        $permissions = $this->moduleManager->isEnabled('Magento_CatalogPermissions')
+            && $this->scopeConfig->isSetFlag('catalog/magento_catalogpermissions/enabled');
+        if ($permissions) {
+            $out[] = Check::warn(
+                self::G_COMMERCE,
+                'Category permissions',
+                'Enabled — OpenSearch-served listings and search do not apply per-customer-group category permissions',
+                'A customer group denied a category can still see its products in FastMagento search and '
+                . 'listings. Until permission-aware serving ships, keep the serving flags off on the store '
+                . 'views that use category permissions (Stores > Configuration > FastMagento > Serving).'
+            );
+        }
+
+        $sharedCatalog = $this->moduleManager->isEnabled('Magento_SharedCatalog')
+            && $this->scopeConfig->isSetFlag('btob/website_configuration/sharedcatalog_active');
+        if ($sharedCatalog) {
+            $out[] = Check::warn(
+                self::G_COMMERCE,
+                'B2B shared catalogs',
+                'Active — OpenSearch-served listings and search do not apply shared-catalog product visibility',
+                'Shared catalogs hide products per company through category permissions; the index has no '
+                . 'notion of them. Keep the serving flags off on B2B store views until shared-catalog-aware '
+                . 'serving ships.'
+            );
+        }
 
         return $out;
     }

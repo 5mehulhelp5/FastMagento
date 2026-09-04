@@ -5,7 +5,42 @@ All notable changes to FastMagento are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.9.0] - 2026-09-04
+## [2.10.0] - 2026-09-04
+
+### Added
+- **Adobe Commerce (EE) schema compatibility.** New `Model\Db\EntityLink` reads the catalogue
+  link field from `MetadataPool` (`row_id` on Commerce content staging, `entity_id` on Open
+  Source) and, on Commerce only, joins the entity table to translate between the two. Every raw
+  query on a staged table now goes through it: category names (`catalog_category_entity_varchar`),
+  tier prices, media gallery values, `catalog_product_super_link` / `catalog_product_relation`
+  parents, `catalog_product_link`, bundle selections, super attributes (ProductIndexer,
+  StockSyncer, InstantProductUpdater, CatalogRuleSyncer, LinkProductCollectionPlugin). Fixes the
+  Commerce reindex errors `Unknown column 's.entity_id' in 'on clause'` and
+  `Unknown column 'catalog_product_entity_tier_price.entity_id'`. Open Source SQL is unchanged
+  (verified byte-identical pages and query counts with serving on/off).
+- **Doctor: Commerce section** — reports the schema edition, and warns when category
+  permissions or B2B shared catalogs are active, since OpenSearch-served pages do not apply
+  those visibility rules yet.
+- **Related / up-sell / cross-sell from the index on Commerce.** The link-collection plugin
+  previously stepped aside whenever the link field was not `entity_id`; it now maps the
+  collection's `row_id` to the entity id with one primary-key lookup.
+
+### Fixed
+- **Free-text attributes rejected documents.** `textarea`, `texteditor` (WYSIWYG) and Page
+  Builder attributes were mapped as `keyword` under `attributes.*`; a value over 32766 bytes
+  (a size-chart table, care instructions) made OpenSearch reject the whole document with
+  "Document contains at least one immense term in field=attributes.<code>". They are analysed
+  `text` now; option/short attributes stay `keyword` with `ignore_above` as a second guard.
+- **First-run "Limit of total fields exceeded" from the rule-price sync.** The sync could write
+  before the first full reindex had created the product index, letting OpenSearch auto-create it
+  with the cluster default field limit; it now waits for the index to exist.
+- Commerce version columns (`row_id`, `created_in`, `updated_in`) no longer appear under
+  `attributes.*` in the document.
+
+### Upgrade notes
+- Run `bin/magento setup:di:compile` (new constructor dependencies) and a full
+  `indexer:reindex fastmagento_product` so the attribute mapping change applies.
+
 
 ### Added
 - **Category widgets and sliders from the index.** "Products of category N" collections (CMS

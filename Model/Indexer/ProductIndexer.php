@@ -8,6 +8,7 @@ use Psr\Log\LoggerInterface;
 use Magento\Catalog\Model\Product;
 use Magento\Catalog\Model\ProductFactory;
 use ParkkTech\FastMagento\Helper\WriteLog;
+use ParkkTech\FastMagento\Model\Db\EntityLink;
 use Magento\Framework\Indexer\ActionInterface;
 use Magento\Framework\Api\SearchCriteriaBuilder;
 use Magento\Eav\Api\AttributeRepositoryInterface;
@@ -29,6 +30,9 @@ use Magento\ConfigurableProduct\Model\ResourceModel\Product\Type\Configurable as
 
 class ProductIndexer implements ActionInterface, MviewActionInterface
 {
+    /** Keyword values under `attributes.*` longer than this are stored but not indexed as terms. */
+    private const KEYWORD_IGNORE_ABOVE = 8191;
+
     /**
      * Bulk-flush chunk size. Docs are streamed to OpenSearch in chunks of this
      * size so memory stays flat and the index fills incrementally instead of
@@ -77,6 +81,7 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
         private ProductFactory $productFactory,
         private WriteLog $writeLog,
         private ProductRepositoryInterface $productRepository,
+        private readonly EntityLink $entityLink,
         private ?\Magento\Framework\Stdlib\DateTime\TimezoneInterface $localeDate = null,
         private ?\ParkkTech\FastMagento\Model\OpenSearch\IndexSettings $indexSettings = null
     ) {
@@ -105,6 +110,9 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
     {
         return [
             'entity_id', 'attribute_set_id', 'type_id', 'sku', 'created_at', 'updated_at',
+            // Commerce content staging exposes the version row as static attributes; they are
+            // never facets and the document is keyed by entity id, not by version.
+            'row_id', 'created_in', 'updated_in',
             'price', 'special_price', 'tier_price', 'weight', 'visibility', 'status',
             'tax_class_id', 'description', 'short_description', 'category_ids', 'media_gallery',
             'shipment_type', 'image', 'small_image', 'thumbnail', 'swatch_image', 'gallery',
@@ -501,11 +509,11 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
     private function getConfigurableChildIds(int $parentId): array
     {
         $connection = $this->productCollectionFactory->create()->getConnection();
-        return array_map('intval', $connection->fetchCol(
-            $connection->select()
-                ->from($connection->getTableName('catalog_product_super_link'), ['product_id'])
-                ->where('parent_id = ?', $parentId)
-        ));
+        $select = $connection->select()
+            ->from(['sl' => $connection->getTableName('catalog_product_super_link')], ['product_id']);
+        $parent = $this->entityLink->productEntityId($select, 'sl', 'parent_id');
+        $select->where($parent . ' = ?', $parentId);
+        return array_map('intval', $connection->fetchCol($select));
     }
 
     /**
@@ -524,8 +532,9 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
                 ['ea' => $connection->getTableName('eav_attribute')],
                 'ea.attribute_id = sa.attribute_id',
                 ['attribute_code']
-            )
-            ->where('sa.product_id = ?', $parentId)
+            );
+        $parent = $this->entityLink->productEntityId($select, 'sa', 'product_id');
+        $select->where($parent . ' = ?', $parentId)
             ->order('sa.position');
         return $connection->fetchCol($select);
     }
@@ -580,9 +589,31 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
         $cpt = $connection->getTableName('catalog_category_product');
         $cev = $connection->getTableName('catalog_category_entity_varchar');
         $select = $connection->select()
-            ->from(['cp' => $cpt], ['product_id'])
-            ->joinLeft(['d' => $cev], "d.entity_id = cp.category_id AND d.attribute_id = {$nameAttrId} AND d.store_id = 0", [])
-            ->joinLeft(['s' => $cev], "s.entity_id = cp.category_id AND s.attribute_id = {$nameAttrId} AND s.store_id = {$storeId}", [])
+            ->from(['cp' => $cpt], ['product_id']);
+        // Commerce: the varchar table keys on catalog_category_entity.row_id, so reach the
+        // category row via the entity table first. Open Source: no join, the same SQL as before.
+        $link = $this->entityLink->categoryLinkField();
+        if ($this->entityLink->isCategoryStaged()) {
+            $select->join(
+                ['ce' => $connection->getTableName('catalog_category_entity')],
+                'ce.entity_id = cp.category_id',
+                []
+            );
+            $catRef = 'ce.' . $link;
+        } else {
+            $catRef = 'cp.category_id';
+        }
+        $select
+            ->joinLeft(
+                ['d' => $cev],
+                "d.{$link} = {$catRef} AND d.attribute_id = {$nameAttrId} AND d.store_id = 0",
+                []
+            )
+            ->joinLeft(
+                ['s' => $cev],
+                "s.{$link} = {$catRef} AND s.attribute_id = {$nameAttrId} AND s.store_id = {$storeId}",
+                []
+            )
             ->columns(['name' => new \Zend_Db_Expr('IFNULL(s.value, d.value)')])
             ->where('cp.product_id IN (?)', $productIds)
             ->order('cp.product_id')
@@ -679,7 +710,7 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
             ->from(['s' => $connection->getTableName('catalog_product_bundle_selection')], ['product_id'])
             ->join(
                 ['e' => $connection->getTableName('catalog_product_entity')],
-                'e.entity_id = s.parent_product_id',
+                $this->entityLink->productChildJoin('e', 's', 'parent_product_id'),
                 ['parent_product_id' => 'e.entity_id']
             )
             ->where('s.product_id IN (?)', $productIds);
@@ -702,8 +733,12 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
         $select = $connection->select()
             ->from(
                 ['l' => $connection->getTableName('catalog_product_link')],
-                ['product_id', 'linked_product_id', 'link_type_id', 'link_id']
-            )
+                ['linked_product_id', 'link_type_id', 'link_id']
+            );
+        // l.product_id is a row_id on Commerce; resolve it to the parent's entity id.
+        $parent = $this->entityLink->productEntityId($select, 'l', 'product_id');
+        $select
+            ->columns(['product_id' => new \Zend_Db_Expr($parent)])
             ->joinLeft(
                 ['la' => $connection->getTableName('catalog_product_link_attribute')],
                 'la.link_type_id = l.link_type_id AND la.product_link_attribute_code = '
@@ -715,7 +750,7 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
                 'ai.product_link_attribute_id = la.product_link_attribute_id AND ai.link_id = l.link_id',
                 ['position' => 'ai.value']
             )
-            ->where('l.product_id IN (?)', $productIds)
+            ->where($parent . ' IN (?)', $productIds)
             ->where('l.link_type_id IN (?)', array_keys(self::LINK_TYPES))
             ->order('position ' . \Magento\Framework\DB\Select::SQL_ASC)
             ->order('l.link_id ' . \Magento\Framework\DB\Select::SQL_ASC);
@@ -754,8 +789,12 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
         }
         $connection = $this->productCollectionFactory->create()->getConnection();
         $select = $connection->select()
-            ->from($connection->getTableName('catalog_product_super_link'), ['product_id', 'parent_id'])
-            ->where('product_id IN (?)', $productIds);
+            ->from(['sl' => $connection->getTableName('catalog_product_super_link')], ['product_id']);
+        // sl.parent_id is a row_id on Commerce; the doc must carry the parent's entity id.
+        $parent = $this->entityLink->productEntityId($select, 'sl', 'parent_id');
+        $select
+            ->columns(['parent_id' => new \Zend_Db_Expr($parent)])
+            ->where('sl.product_id IN (?)', $productIds);
         $map = [];
         foreach ($connection->fetchAll($select) as $row) {
             $map[(int) $row['product_id']][] = (string) $row['parent_id'];
@@ -800,9 +839,12 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
         }
         $connection = $this->productCollectionFactory->create()->getConnection();
         $select = $connection->select()
-            ->from($connection->getTableName('catalog_product_super_link'), ['parent_id', 'product_id'])
-            ->where('parent_id IN (?)', $parentIds)
-            ->order('product_id');
+            ->from(['sl' => $connection->getTableName('catalog_product_super_link')], []);
+        $parent = $this->entityLink->productEntityId($select, 'sl', 'parent_id');
+        $select
+            ->columns(['parent_id' => new \Zend_Db_Expr($parent), 'product_id' => 'sl.product_id'])
+            ->where($parent . ' IN (?)', $parentIds)
+            ->order('sl.product_id');
         $map = [];
         foreach ($connection->fetchAll($select) as $row) {
             $map[(int) $row['parent_id']][] = (int) $row['product_id'];
@@ -938,16 +980,25 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
         $mg  = $connection->getTableName('catalog_product_entity_media_gallery');
         $vte = $connection->getTableName('catalog_product_entity_media_gallery_value_to_entity');
         $val = $connection->getTableName('catalog_product_entity_media_gallery_value');
+        // value_to_entity / value key on row_id on Commerce; vte<->d/s match on the link field and
+        // the product id column/filter go through the entity id expression (a join only on EE).
+        $link = $this->entityLink->productLinkField();
         $select = $connection->select()
             ->from(['mg' => $mg], ['value_id', 'file' => 'value', 'media_type'])
-            ->join(['vte' => $vte], 'vte.value_id = mg.value_id', ['entity_id'])
-            ->joinLeft(['d' => $val], 'd.value_id = mg.value_id AND d.entity_id = vte.entity_id AND d.store_id = 0',
+            ->join(['vte' => $vte], 'vte.value_id = mg.value_id', []);
+        $pid = $this->entityLink->productEntityId($select, 'vte');
+        $select
+            ->columns(['entity_id' => new \Zend_Db_Expr($pid)])
+            ->joinLeft(['d' => $val], "d.value_id = mg.value_id AND d.{$link} = vte.{$link} AND d.store_id = 0",
                 ['label_default' => 'label', 'position_default' => 'position', 'disabled_default' => 'disabled'])
-            ->joinLeft(['s' => $val], 's.value_id = mg.value_id AND s.entity_id = vte.entity_id AND s.store_id = ' . (int) $storeId,
-                ['s_label' => 'label', 's_position' => 'position', 's_disabled' => 'disabled'])
-            ->where('vte.entity_id IN (?)', $productIds)
+            ->joinLeft(
+                ['s' => $val],
+                "s.value_id = mg.value_id AND s.{$link} = vte.{$link} AND s.store_id = " . (int) $storeId,
+                ['s_label' => 'label', 's_position' => 'position', 's_disabled' => 'disabled']
+            )
+            ->where($pid . ' IN (?)', $productIds)
             ->where('mg.attribute_id = ?', $attrId)
-            ->order('vte.entity_id')
+            ->order($pid)
             ->order(new \Zend_Db_Expr('IFNULL(d.position, 0)'))
             ->order('mg.value_id');
 
@@ -1212,11 +1263,37 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
                 continue;
             }
 
-            // Assign dynamic type (we use 'keyword' to allow filtering & exact matching)
-            $mapping[$attributeCode] = ['type' => 'keyword'];
+            $mapping[$attributeCode] = $this->attributeFieldMapping($attribute);
         }
 
         return $mapping;
+    }
+
+    /**
+     * How one custom attribute is mapped under `attributes.*`.
+     *
+     * Option and short-value attributes are keywords: that is what filtering, facets and exact
+     * matching need. Free text — textarea, WYSIWYG (texteditor), Page Builder — is not a term and
+     * must not be mapped as one: Lucene refuses any single term over 32766 bytes, so a size chart
+     * or care-instructions HTML of that length rejected the whole document ("Document contains at
+     * least one immense term in field=attributes.<code>"). Those are analysed text instead, which
+     * has no such limit and is still searchable. The keyword branch carries `ignore_above` as a
+     * second guard: a value longer than that is kept in _source but not indexed as a term, so an
+     * over-long value in an attribute that is nominally a select can never reject a document.
+     *
+     * @return array<string, mixed>
+     */
+    private function attributeFieldMapping(\Magento\Eav\Api\Data\AttributeInterface $attribute): array
+    {
+        $input = (string) $attribute->getFrontendInput();
+        $backend = (string) $attribute->getBackendType();
+        $freeText = in_array($input, ['textarea', 'texteditor', 'pagebuilder'], true)
+            || ($backend === 'text' && $input !== 'multiselect' && $input !== 'select');
+        if ($freeText) {
+            return ['type' => 'text'];
+        }
+
+        return ['type' => 'keyword', 'ignore_above' => self::KEYWORD_IGNORE_ABOVE];
     }
 
 
@@ -1851,11 +1928,15 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
         $connection = $this->productCollectionFactory->create()->getConnection();
         $select = $connection->select()
             ->from(
-                $connection->getTableName('catalog_product_entity_tier_price'),
-                ['entity_id', 'all_groups', 'customer_group_id', 'qty', 'value']
-            )
-            ->where('entity_id IN (?)', $productIds)
-            ->where('website_id IN (?)', [0, 1]);
+                ['tp' => $connection->getTableName('catalog_product_entity_tier_price')],
+                ['all_groups', 'customer_group_id', 'qty', 'value']
+            );
+        // tp.row_id on Commerce: resolve to the entity id (join only on EE), keep the key name.
+        $pid = $this->entityLink->productEntityId($select, 'tp');
+        $select
+            ->columns(['entity_id' => new \Zend_Db_Expr($pid)])
+            ->where($pid . ' IN (?)', $productIds)
+            ->where('tp.website_id IN (?)', [0, 1]);
 
         $map = [];
         foreach ($connection->fetchAll($select) as $row) {
