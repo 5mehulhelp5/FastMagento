@@ -75,7 +75,8 @@ bin/magento indexer:reindex fastmagento_product fastmagento_category fastmagento
 bin/magento fastmagento:doctor
 ```
 
-**Requirements:** Magento 2.4.6+, PHP 8.1–8.5, and a configured OpenSearch/Elasticsearch engine.
+**Requirements:** Magento 2.4.6+ — Open Source or **Adobe Commerce** (content-staging schema since 2.10.0,
+see [Adobe Commerce compatibility](#adobe-commerce-ee-compatibility)), PHP 8.1–8.5, and a configured OpenSearch/Elasticsearch engine.
 Full options (VCS install before Packagist, manual install, per-indexer notes) → [**Installation**](#installation).
 
 > 🩺 **Something not working?** Run **`bin/magento fastmagento:doctor`**. Every FastMagento failure

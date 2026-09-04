@@ -13,7 +13,12 @@ drives the autocomplete/search UI.
 
 ## 1. Prerequisites
 
-- Magento 2.4.x (verified on 2.4.8-p2), PHP 8.3/8.4.
+- Magento 2.4.x (verified on 2.4.8-p2 and 2.4.9), PHP 8.3/8.4. Open Source or **Adobe Commerce**:
+  the content-staging schema (`row_id`) is supported since 2.10.0; on Commerce the doctor's
+  **Commerce** section tells you whether category permissions or B2B shared catalogs are active,
+  which OpenSearch-served listings and search do not apply yet (keep the serving flags off on
+  those store views). After upgrading to 2.10.0 run `setup:di:compile` and a full
+  `indexer:reindex fastmagento_product` (attribute mapping change).
 - A running **OpenSearch** (or Elasticsearch 7/8) cluster reachable from the app.
 - `catalog/search/engine` set (default `opensearch` on 2.4.8). Configure host/port:
   - `catalog/search/opensearch_server_hostname` (e.g. `localhost`)
