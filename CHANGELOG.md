@@ -5,6 +5,14 @@ All notable changes to FastMagento are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.1] - 2026-09-29
+
+### Fixed
+- **Facet headings used the attribute code instead of its label** ("Seller Id" instead of
+  "Seller"), in both instant search and GraphQL aggregations. They now show the attribute's
+  storefront label for the current store view (new `Model\Search\FacetLabelResolver`, served
+  from the cached EAV config), falling back to the readable code only when there is no label.
+
 ## [2.11.0] - 2026-09-29
 
 ### Added

@@ -26,9 +26,14 @@ class Instant extends Action
         private readonly CategoryDataProvider $categoryData,
         private readonly \ParkkTech\FastMagento\Model\OptionDictionary $optionDictionary,
         private readonly \Psr\Log\LoggerInterface $logger,
-        private readonly \ParkkTech\FastMagento\Model\Analytics\EventRecorderInterface $events
+        private readonly \ParkkTech\FastMagento\Model\Analytics\EventRecorderInterface $events,
+        private ?\ParkkTech\FastMagento\Model\Search\FacetLabelResolver $facetLabels = null
     ) {
         parent::__construct($context);
+        // Optional-with-fallback so compiled DI from an earlier version keeps working.
+        $this->facetLabels = $facetLabels
+            ?? \Magento\Framework\App\ObjectManager::getInstance()
+                ->get(\ParkkTech\FastMagento\Model\Search\FacetLabelResolver::class);
     }
 
     public function execute()
@@ -181,7 +186,7 @@ class Instant extends Action
         foreach ($facets as &$facet) {
             $code = (string) ($facet['attribute'] ?? '');
             $isCategory = $code === 'category';
-            $facet['label'] = $isCategory ? 'Category' : ucwords(str_replace('_', ' ', $code));
+            $facet['label'] = $isCategory ? (string) __('Category') : $this->facetLabels->getLabel($code);
             $unresolved = 0;
             $total = count($facet['options']);
             foreach ($facet['options'] as &$option) {

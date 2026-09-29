@@ -32,8 +32,13 @@ class AggregationsOsHydrationPlugin
         private readonly CategoryDataProvider $categoryData,
         private readonly WriteLog $writeLog,
         private readonly FacetHolder $facetHolder,
-        private readonly PriceCurrency $priceCurrency
+        private readonly PriceCurrency $priceCurrency,
+        private ?\ParkkTech\FastMagento\Model\Search\FacetLabelResolver $facetLabels = null
     ) {
+        // Optional-with-fallback so compiled DI from an earlier version keeps working.
+        $this->facetLabels = $facetLabels
+            ?? \Magento\Framework\App\ObjectManager::getInstance()
+                ->get(\ParkkTech\FastMagento\Model\Search\FacetLabelResolver::class);
     }
 
     /**
@@ -177,13 +182,11 @@ class AggregationsOsHydrationPlugin
     }
 
     /**
-     * Readable fallback label for a facet attribute (e.g. "shock_spacing" -> "Shock Spacing").
-     * FastMagento's OS-native facets carry no EAV attribute-label metadata by design, so there
-     * is no attribute frontend label to read here; this matches what the storefront's own
-     * facet UI already shows for the same attribute codes.
+     * Facet heading: the attribute's storefront label for this store (see FacetLabelResolver),
+     * the same heading the storefront's own facet UI shows.
      */
     private function humanizeLabel(string $code): string
     {
-        return ucwords(str_replace('_', ' ', $code));
+        return $this->facetLabels->getLabel($code);
     }
 }
