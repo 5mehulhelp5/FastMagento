@@ -68,6 +68,7 @@ class ProductRepositoryPlugin
             $native = $proceed($productId, $editMode, $storeId, $forceReload);
             if ($native && $native->getId()) {
                 $this->productIndexer->indexProductObject($native);
+                $this->openSearchPdpFetcher->forget((int) $productId);
                 $doc = $this->openSearchPdpFetcher->fetchPdpById($productId);
             }
             if (!$doc) {

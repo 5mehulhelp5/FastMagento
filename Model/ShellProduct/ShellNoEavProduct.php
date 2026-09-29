@@ -362,6 +362,14 @@ class ShellNoEavProduct extends CoreProduct
         // (a composite parent is salable when any child is in stock; a simple/child
         // reflects its own indexed stock). Honour it, and skip core Product::isSalable()'s
         // 'salable'-cache/getOrigData dance which is unreliable for a never-DB-loaded shell.
+        // A disabled product is never salable, whatever its stock says (core
+        // AbstractType::isSalable() checks status first too). Without this, a disabled but
+        // in-stock product could be added to the cart and then fail when the quote is saved.
+        if ($this->getStatus() !== null
+            && (int) $this->getStatus() !== \Magento\Catalog\Model\Product\Attribute\Source\Status::STATUS_ENABLED
+        ) {
+            return false;
+        }
         if ($this->hasData('salable')) {
             return (bool) $this->getData('salable');
         }

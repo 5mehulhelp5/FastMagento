@@ -118,8 +118,42 @@ class OpenSearchPdpFetcher
             }
             $this->memo[$id] = null; // a confirmed miss is memoised too; an exception is not (transient)
         } catch (\Exception $e) {
+            if ($this->isNotFound($e)) {
+                // The client reports a missing document by throwing. That is an ordinary miss
+                // (callers fall back to EAV), not an error: memoise it and stay quiet.
+                $this->memo[$id] = null;
+                return null;
+            }
             $this->logger->error('OpenSearchPdpFetcher error: ' . $e->getMessage());
         }
         return null;
+    }
+
+    /**
+     * Drop the memoised entry for $id so the next fetch goes to OpenSearch again.
+     *
+     * Needed after warming a missed product into the index: the miss was memoised, so a plain
+     * re-fetch would keep returning null for the rest of the request.
+     */
+    public function forget(int $id): void
+    {
+        unset($this->memo[$id]);
+    }
+
+    /**
+     * Whether the client exception means "no such document" rather than a real failure.
+     *
+     * Checked by class name and HTTP code so it holds across opensearch-php versions
+     * (Missing404Exception did not always extend NotFoundHttpException).
+     */
+    private function isNotFound(\Exception $e): bool
+    {
+        $is404 = $e instanceof \OpenSearch\Common\Exceptions\Missing404Exception
+            || $e instanceof \OpenSearch\Exception\NotFoundHttpException
+            || (int) $e->getCode() === 404;
+
+        // A missing index (e.g. mid-reindex alias swap) is also a 404, but it is an outage,
+        // not a missed document: keep logging it.
+        return $is404 && stripos($e->getMessage(), 'index_not_found') === false;
     }
 }

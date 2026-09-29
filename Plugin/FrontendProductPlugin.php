@@ -65,6 +65,7 @@ class FrontendProductPlugin
                 $native = $proceed($modelId, $field);
                 if ($native && $native->getId()) {
                     $this->productIndexer->indexProductObject($native);
+                    $this->openSearchPdpFetcher->forget((int) $modelId);
                     $doc = $this->openSearchPdpFetcher->fetchPdpById($modelId);
                 }
                 if (!$doc) {

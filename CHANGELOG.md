@@ -5,6 +5,23 @@ All notable changes to FastMagento are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.1] - 2026-09-29
+
+### Fixed
+- **Disabled products returned HTTP 500 instead of 404.** The product-view controller override
+  had dropped core's error handling, so any product that can't be shown in the store (disabled,
+  not in the website, deleted) threw `NoSuchEntityException` out of the controller. It now
+  behaves like core: a 404 for a product that can't be shown, a logged `noroute` for anything
+  else. The override also passes the `category` and `options` request params again (breadcrumbs,
+  "specify options" notice) and hands PDP POSTs to core.
+- **A disabled but in-stock product could be added to the cart**, which then failed on quote
+  save with a `quote_item_option` foreign-key error. `ShellNoEavProduct::isSalable()` now
+  returns false for any product that isn't enabled, matching core.
+- **Every OpenSearch document miss was logged as an error** (`OpenSearchPdpFetcher error:
+  {"found":false}`) and was not memoised, so the same miss was re-fetched throughout the
+  request. A not-found response is now an ordinary, memoised miss. Warm-on-miss drops the
+  memoised miss before re-reading the freshly indexed document.
+
 ## [2.10.0] - 2026-09-04
 
 ### Added
