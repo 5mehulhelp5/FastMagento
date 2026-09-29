@@ -35,6 +35,8 @@ use Psr\Log\LoggerInterface;
  */
 class CategoryUrlFinderPlugin
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     public const XML_PATH_SERVE_URLS = 'fastmagento/serving/serve_url_rewrites';
 
     private array $categoryMap = [];
@@ -54,6 +56,9 @@ class CategoryUrlFinderPlugin
 
     public function aroundFindOneByData(UrlFinderInterface $subject, callable $proceed, array $data)
     {
+        if (!$this->isServingEnabled()) {
+            return $proceed($data); // master switch off: native behaviour
+        }
         try {
             if (array_key_exists(UrlRewrite::REQUEST_PATH, $data)) {
                 $answer = $this->byRequestPath($data);

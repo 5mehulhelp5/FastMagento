@@ -23,6 +23,8 @@ use Magento\Captcha\Model\ResourceModel\Log;
  */
 class RemoteAttemptsMemoPlugin
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     /** @var int|string|null */
     private $count = null;
 
@@ -33,6 +35,9 @@ class RemoteAttemptsMemoPlugin
      */
     public function aroundCountAttemptsByRemoteAddress(Log $subject, callable $proceed)
     {
+        if (!$this->isServingEnabled()) {
+            return $proceed(); // master switch off: native behaviour
+        }
         if ($this->count === null) {
             $this->count = $proceed();
         }

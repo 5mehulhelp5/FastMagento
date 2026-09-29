@@ -32,6 +32,8 @@ use Magento\Framework\Registry;
  */
 class LayerCategoryDataProviderPlugin
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     /** @var array<int, int> spl_object_id($dataProvider) => requested category id */
     private array $requested = [];
 
@@ -60,6 +62,9 @@ class LayerCategoryDataProviderPlugin
      */
     public function aroundGetCategory(CategoryDataProvider $subject, callable $proceed)
     {
+        if (!$this->isServingEnabled()) {
+            return $proceed(); // master switch off: native behaviour
+        }
         $requested = $this->requested[spl_object_id($subject)] ?? null;
         if ($requested === null || $requested <= 0) {
             return $proceed();

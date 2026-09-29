@@ -39,6 +39,8 @@ use Magento\Framework\Registry;
  */
 class CompositeParentStockStatusPlugin
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     public function __construct(private readonly Registry $registry)
     {
     }
@@ -56,6 +58,9 @@ class CompositeParentStockStatusPlugin
         $productId,
         $scopeId = null
     ): StockStatusInterface {
+        if (!$this->isServingEnabled()) {
+            return $result; // master switch off: native behaviour
+        }
         // Already sellable — nothing to correct.
         if ((int) $result->getStockStatus() === Stock::STOCK_IN_STOCK) {
             return $result;

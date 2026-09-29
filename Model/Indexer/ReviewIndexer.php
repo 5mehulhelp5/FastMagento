@@ -45,28 +45,39 @@ class ReviewIndexer implements ActionInterface, MviewActionInterface
         private readonly StoreManagerInterface $storeManager,
         private readonly OpenSearchConfig $openSearchConfig,
         private readonly IndexSettings $indexSettings,
-        private readonly WriteLog $writeLog
+        private readonly WriteLog $writeLog,
+        private ?\ParkkTech\FastMagento\Model\OpenSearch\IndexSwapper $indexSwapper = null
     ) {
+        $this->indexSwapper = $indexSwapper
+            ?? \Magento\Framework\App\ObjectManager::getInstance()
+                ->get(\ParkkTech\FastMagento\Model\OpenSearch\IndexSwapper::class);
     }
 
     public function executeFull(): void
     {
-        $indexName = $this->getIndexName();
+        // Blue/green: fill a fresh versioned index while the storefront keeps reading the current
+        // one, then move the alias atomically (see IndexSwapper). run() logs and swallows its own
+        // errors, so a failed fill is detected by its flag and aborts the swap.
         try {
-            $client = $this->getSearchClient();
-            if ($client->indexExists($indexName)) {
-                $client->deleteIndex($indexName);
-            }
-            $client->createIndex($indexName, $this->buildMapping());
+            $this->indexSwapper->rebuild(
+                $this->getSearchClient(),
+                $this->getIndexName(),
+                $this->buildMapping(),
+                function (string $target): void {
+                    $this->writeIndex = $target;
+                    $this->runFailed = false;
+                    try {
+                        $this->run(null);
+                    } finally {
+                        $this->writeIndex = null;
+                    }
+                    if ($this->runFailed) {
+                        throw new \RuntimeException('review index fill failed; keeping the current index');
+                    }
+                }
+            );
         } catch (\Throwable $e) {
-            $this->writeLog->writeErrorLog('[FastMagento] review index (re)create failed: ' . $e->getMessage());
-            return;
-        }
-        $this->run(null);
-        try {
-            $client->getOpenSearchClient()->indices()->refresh(['index' => $indexName]);
-        } catch (\Throwable $e) {
-            $this->writeLog->writeErrorLog('[FastMagento] review index refresh failed: ' . $e->getMessage());
+            $this->writeLog->writeErrorLog('[FastMagento] review index rebuild failed: ' . $e->getMessage());
         }
     }
 
@@ -96,13 +107,32 @@ class ReviewIndexer implements ActionInterface, MviewActionInterface
     }
 
     /**
+     * Set only while executeFull() fills a new versioned index.
+     */
+    private ?string $writeIndex = null;
+
+    /**
+     * Set by run() when it swallowed an error, so a full rebuild does not swap in a partial index.
+     */
+    private bool $runFailed = false;
+
+    /**
+     * Index that writes go to: the versioned index being built during a full rebuild, otherwise
+     * the alias every reader uses.
+     */
+    private function getWriteIndexName(): string
+    {
+        return $this->writeIndex ?? $this->getIndexName();
+    }
+
+    /**
      * @param int[]|null $ids null = every approved review (full build), otherwise exactly these
      */
     private function run(?array $ids): void
     {
         try {
             $client = $this->getSearchClient()->getOpenSearchClient();
-            $indexName = $this->getIndexName();
+            $indexName = $this->getWriteIndexName();
             $storeId = $this->getIndexStoreId();
             $conn = $this->resource->getConnection();
             $entityId = $this->productEntityId();
@@ -150,6 +180,7 @@ class ReviewIndexer implements ActionInterface, MviewActionInterface
             }
             $this->refreshProductSummaries($client, $conn, array_keys($affectedProducts), $storeId);
         } catch (\Throwable $e) {
+            $this->runFailed = true;
             $this->writeLog->writeErrorLog('[FastMagento] review indexer error: ' . $e->getMessage());
         }
     }

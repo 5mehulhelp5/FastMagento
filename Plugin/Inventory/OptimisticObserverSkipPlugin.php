@@ -26,6 +26,8 @@ use Magento\Store\Model\ScopeInterface;
  */
 class OptimisticObserverSkipPlugin
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     private const XML_PATH_FAST_CHECKOUT = 'fastmagento/cart/enable_fast_checkout';
     private const XML_PATH_OS_SERVE = 'fastmagento/cart/os_serve_quote_items';
     private const XML_PATH_OPTIMISTIC_STOCK = 'fastmagento/cart/optimistic_stock';
@@ -44,6 +46,9 @@ class OptimisticObserverSkipPlugin
      */
     public function aroundExecute(ObserverInterface $subject, callable $proceed, EventObserver $observer)
     {
+        if (!$this->isServingEnabled()) {
+            return $proceed($observer); // master switch off: native behaviour
+        }
         if ($this->shouldSkip()) {
             return;
         }

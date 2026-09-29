@@ -19,8 +19,13 @@ use ParkkTech\FastMagento\Model\ShellProduct\ShellNoEavProduct;
  */
 class ApplyCatalogRulePrice implements ObserverInterface
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     public function execute(Observer $observer)
     {
+        if (!$this->isServingEnabled()) {
+            return; // master switch off: native behaviour
+        }
         $quote = $observer->getQuote();
         $groupId = (int) $quote->getCustomerGroupId();
 

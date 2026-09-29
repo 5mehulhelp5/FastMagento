@@ -5,6 +5,25 @@ All notable changes to FastMagento are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.0] - 2026-09-29
+
+### Added
+- **Master switch: Stores > Configuration > FastMagento > General > Serve Storefront from
+  OpenSearch** (`fastmagento/general/serving_enabled`, default Yes). Set it to No and every
+  storefront read goes back to stock Magento: product, category and search pages, cart, GraphQL,
+  autocomplete and instant search. Indexing keeps running so the indices stay current. Switching
+  takes a config change and a cache flush, no recompile:
+  `bin/magento config:set fastmagento/general/serving_enabled 0 && bin/magento cache:flush`.
+  Admin, cron and CLI are never gated, so index maintenance (reindex on save, stock and price
+  sync) is unaffected. Use it to rule FastMagento in or out when troubleshooting.
+- **Blue/green full reindex** for the product, category and review indices. The configured index
+  name is now an alias: a full reindex builds a fresh versioned index while the storefront keeps
+  reading the current one, then switches the alias atomically and drops the old index. Before,
+  a full reindex deleted the index first, so every page fell back to MySQL until it refilled.
+  A rebuild that ends up with less than half the live document count is not swapped in (it
+  failed part-way); the live index stays and the failure is logged. Existing installs migrate
+  on their first full reindex, with no gap.
+
 ## [2.10.1] - 2026-09-29
 
 ### Fixed

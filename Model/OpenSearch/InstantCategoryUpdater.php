@@ -38,6 +38,8 @@ use ParkkTech\FastMagento\Model\Indexer\CategoryIndexer;
  */
 class InstantCategoryUpdater
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     public function __construct(
         private readonly CategoryIndexer $categoryIndexer,
         private readonly CategoryDataProvider $categoryData,
@@ -132,6 +134,15 @@ class InstantCategoryUpdater
      * @return int[]
      */
     private function descendantIds(int $categoryId): array
+    {
+        // Index maintenance: must see the indexed tree even when serving is switched off.
+        return $this->servingGate()->bypass(fn (): array => $this->indexedDescendantIds($categoryId));
+    }
+
+    /**
+     * @return int[]
+     */
+    private function indexedDescendantIds(int $categoryId): array
     {
         $doc = $this->categoryData->getById($categoryId);
         $path = (string) ($doc['path'] ?? '');

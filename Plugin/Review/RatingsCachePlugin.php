@@ -27,6 +27,8 @@ use Psr\Log\LoggerInterface;
  */
 class RatingsCachePlugin
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     public const CACHE_TAG = 'FASTMAGENTO_REVIEW_RATINGS';
     private const CACHE_KEY = 'FASTMAGENTO_REVIEW_RATINGS_';
     private const LIFETIME = 86400;
@@ -46,6 +48,9 @@ class RatingsCachePlugin
 
     public function aroundGetRatings(ReviewForm $subject, callable $proceed)
     {
+        if (!$this->isServingEnabled()) {
+            return $proceed(); // master switch off: native behaviour
+        }
         if ($this->ratings !== null) {
             return $this->ratings;
         }

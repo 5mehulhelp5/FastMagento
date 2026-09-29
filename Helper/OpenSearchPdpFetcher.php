@@ -11,6 +11,8 @@ use ParkkTech\FastMagento\Model\Indexer\ProductIndexer;
  */
 class OpenSearchPdpFetcher
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     private $clientResolver;
     private $engineResolver;
     private $logger;
@@ -45,6 +47,9 @@ class OpenSearchPdpFetcher
      */
     public function fetchByIds(array $ids): array
     {
+        if (!$this->isServingEnabled()) {
+            return []; // master switch off: callers fall back to native
+        }
         $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
         $out = [];
         if (!$ids) {
@@ -96,6 +101,9 @@ class OpenSearchPdpFetcher
      */
     public function fetchPdpById(int $id): ?array
     {
+        if (!$this->isServingEnabled()) {
+            return null; // master switch off: callers fall back to native
+        }
         if (array_key_exists($id, $this->memo)) {
             return $this->memo[$id];
         }

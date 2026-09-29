@@ -19,6 +19,8 @@ use Magento\Catalog\Model\ResourceModel\Product as ProductResource;
  */
 class ProductRepositoryPlugin
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     /** OS-serve on the customer-facing storefront (frontend) and headless GraphQL areas. */
     private const SERVABLE_AREAS = [Area::AREA_FRONTEND, Area::AREA_GRAPHQL];
 
@@ -51,7 +53,9 @@ class ProductRepositoryPlugin
         $storeId = null,
         $forceReload = false
     ) {
-        if (!in_array($this->state->getAreaCode(), self::SERVABLE_AREAS, true)) {
+        if (!$this->isServingEnabled()
+            || !in_array($this->state->getAreaCode(), self::SERVABLE_AREAS, true)
+        ) {
             return $proceed($productId, $editMode, $storeId, $forceReload);
         }
 
@@ -94,7 +98,9 @@ class ProductRepositoryPlugin
                                    $storeId = null,
                                    $forceReload = false
     ) {
-        if (!in_array($this->state->getAreaCode(), self::SERVABLE_AREAS, true)) {
+        if (!$this->isServingEnabled()
+            || !in_array($this->state->getAreaCode(), self::SERVABLE_AREAS, true)
+        ) {
             return $proceed($sku, $editMode, $storeId, $forceReload);
         }
 

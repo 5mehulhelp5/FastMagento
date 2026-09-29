@@ -3,6 +3,9 @@
         xsi:noNamespaceSchemaLocation="urn:magento:module:Magento_Store:etc/config.xsd">
     <default>
         <fastmagento>
+            <general>
+                <serving_enabled>1</serving_enabled>
+            </general>
             <indexing>
                 <opensearch_index_prefix>products</opensearch_index_prefix>
                 <opensearch_category_index_prefix>categories</opensearch_category_index_prefix>

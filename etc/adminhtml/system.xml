@@ -14,6 +14,16 @@
             <tab>fastmagento</tab>
             <resource>ParkkTech_FastMagento::config</resource>
 
+            <!-- Master switch -->
+            <group id="general" translate="label" sortOrder="1" showInDefault="1" showInWebsite="1" showInStore="1">
+                <label>General</label>
+                <field id="serving_enabled" translate="label comment" type="select" sortOrder="1" showInDefault="1" showInWebsite="1" showInStore="1">
+                    <label>Serve Storefront from OpenSearch</label>
+                    <source_model>Magento\Config\Model\Config\Source\Yesno</source_model>
+                    <comment><![CDATA[Master switch. <strong>No</strong> hands every storefront read back to stock Magento (product and category pages, search, cart, GraphQL) while indexing keeps running, so switching back is instant. Use it to rule FastMagento in or out when troubleshooting. Flush the cache after changing it.]]></comment>
+                </field>
+            </group>
+
             <!-- Indexing Configuration -->
             <group id="indexing" translate="label" sortOrder="10" showInDefault="1" showInWebsite="1" showInStore="1">
                 <label>Indexing Configuration</label>

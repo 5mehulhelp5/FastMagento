@@ -23,6 +23,8 @@ use Magento\ConfigurableProduct\Model\ConfigurableAttributeData;
  */
 class ConfigurableDefaultValuesPlugin
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     /**
      * @param array<string, mixed> $result
      * @return array<string, mixed>
@@ -31,6 +33,9 @@ class ConfigurableDefaultValuesPlugin
         ConfigurableAttributeData $subject,
         array $result
     ): array {
+        if (!$this->isServingEnabled()) {
+            return $result; // master switch off: native behaviour
+        }
         if (empty($result['defaultValues']) || !is_array($result['defaultValues'])) {
             return $result;
         }

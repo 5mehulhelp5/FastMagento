@@ -22,6 +22,8 @@ use ParkkTech\FastMagento\Helper\WriteLog;
  */
 class CategoryDataProvider
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     /** OS default max_result_window; the catalog has far fewer categories. */
     private const MAX_CATEGORIES = 10000;
 
@@ -94,6 +96,12 @@ class CategoryDataProvider
     private function load(): void
     {
         if ($this->byId !== null) {
+            return;
+        }
+        if (!$this->isServingEnabled()) {
+            // Master switch off: every reader falls back to native. Nothing is memoised, so index
+            // maintenance running later in the request under ServingGate::bypass() still loads.
+            $this->available = false;
             return;
         }
         $this->byId = [];

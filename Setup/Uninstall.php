@@ -70,20 +70,47 @@ class Uninstall implements UninstallInterface
     private function dropIndices(): void
     {
         try {
-            $client = $this->clientResolver->create($this->engineResolver->getCurrentSearchEngine());
-            foreach ([
-                $this->openSearchConfig->getIndexName(),
-                $this->openSearchConfig->getCategoryIndexName(),
-                $this->openSearchConfig->getAttributeOptionIndexName(),
-                $this->openSearchConfig->getReviewIndexName(),
-            ] as $index) {
-                if ($index !== '' && $client->indexExists($index)) {
-                    $client->deleteIndex($index);
+            $indices = $this->clientResolver->create($this->engineResolver->getCurrentSearchEngine())
+                ->getOpenSearchClient()->indices();
+        } catch (\Throwable $e) {
+            $this->logger->error('[FastMagento] uninstall: no OpenSearch client: ' . $e->getMessage());
+            return;
+        }
+        foreach ([
+            $this->openSearchConfig->getIndexName(),
+            $this->openSearchConfig->getCategoryIndexName(),
+            $this->openSearchConfig->getAttributeOptionIndexName(),
+            $this->openSearchConfig->getReviewIndexName(),
+        ] as $name) {
+            if ($name === '') {
+                continue;
+            }
+            // Since 2.11 the configured names are aliases over versioned indices
+            // (<name>_v<timestamp><hex>, see IndexSwapper). An alias can't be deleted as an index,
+            // so resolve it, and also sweep versions left by an interrupted rebuild.
+            try {
+                $concrete = [];
+                if ($indices->existsAlias(['name' => $name])) {
+                    $concrete = array_keys($indices->getAlias(['name' => $name]));
+                } elseif ($indices->exists(['index' => $name])) {
+                    $concrete = [$name];
+                }
+                try {
+                    foreach (array_keys($indices->get(['index' => $name . '_v*'])) as $version) {
+                        if (\ParkkTech\FastMagento\Model\OpenSearch\IndexSwapper::isVersionOf($name, (string) $version)) {
+                            $concrete[] = (string) $version;
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    // no versioned indices
+                }
+                foreach (array_unique($concrete) as $index) {
+                    $indices->delete(['index' => $index]);
                     $this->logger->info('[FastMagento] uninstall: deleted index ' . $index);
                 }
+            } catch (\Throwable $e) {
+                $this->logger->error('[FastMagento] uninstall: could not delete ' . $name . ': ' . $e->getMessage());
             }
-        } catch (\Throwable $e) {
-            $this->logger->error('[FastMagento] uninstall: could not delete the OpenSearch indices: ' . $e->getMessage());
         }
     }
 }

@@ -29,6 +29,8 @@ use ParkkTech\FastMagento\Model\Plp\ListingHydrator;
  */
 class Collection extends CoreFulltextCollection
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     private ?ListingHydrator $fastMagentoHydrator = null;
     private ?State $fastMagentoAppState = null;
 
@@ -55,6 +57,9 @@ class Collection extends CoreFulltextCollection
 
     private function fastMagentoCanServe(): bool
     {
+        if (!$this->isServingEnabled()) {
+            return false;
+        }
         try {
             if ($this->fastMagentoGetAppState()->getAreaCode() !== Area::AREA_FRONTEND) {
                 return false;

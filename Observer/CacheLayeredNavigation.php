@@ -40,6 +40,8 @@ use Psr\Log\LoggerInterface;
  */
 class CacheLayeredNavigation implements ObserverInterface
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     public const XML_PATH_ENABLED = 'fastmagento/serving/cache_layered_nav';
     public const XML_PATH_LIFETIME = 'fastmagento/serving/cache_layered_nav_lifetime';
     public const XML_PATH_BLOCKS = 'fastmagento/serving/cache_layered_nav_blocks';
@@ -61,6 +63,9 @@ class CacheLayeredNavigation implements ObserverInterface
 
     public function execute(Observer $observer): void
     {
+        if (!$this->isServingEnabled()) {
+            return; // master switch off: native behaviour
+        }
         try {
             if (!$this->scopeConfig->isSetFlag(self::XML_PATH_ENABLED, ScopeInterface::SCOPE_STORE)) {
                 return;

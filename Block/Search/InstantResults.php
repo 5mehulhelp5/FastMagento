@@ -15,6 +15,8 @@ use ParkkTech\FastMagento\Model\Search\RelevanceConfig;
  */
 class InstantResults extends Template
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     public function __construct(
         Template\Context $context,
         private readonly RelevanceConfig $relevanceConfig,
@@ -29,5 +31,13 @@ class InstantResults extends Template
     public function getGridColumns(): int
     {
         return $this->relevanceConfig->getGridColumns();
+    }
+
+    /**
+     * Render nothing while the serving master switch is off, so stock search results show.
+     */
+    protected function _toHtml()
+    {
+        return $this->isServingEnabled() ? parent::_toHtml() : '';
     }
 }

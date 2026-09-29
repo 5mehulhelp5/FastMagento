@@ -16,6 +16,7 @@
         <referenceContainer name="content">
             <block class="Magento\Framework\View\Element\Template"
                    name="fastmagento.autocomplete.init"
+                   ifconfig="fastmagento/general/serving_enabled"
                    template="ParkkTech_FastMagento::search/autocomplete-init.phtml"/>
         </referenceContainer>
         <!-- Subtle "powered by" credit line in the footer (visible, tasteful attribution). -->

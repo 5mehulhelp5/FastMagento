@@ -18,6 +18,8 @@ use ParkkTech\FastMagento\Model\OptionDictionary;
  */
 class SourceOptionPlugin
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     public function __construct(private readonly OptionDictionary $dictionary)
     {
     }
@@ -28,6 +30,9 @@ class SourceOptionPlugin
      */
     public function aroundGetAllOptions(Table $subject, callable $proceed, $withEmpty = true, $defaultValues = false)
     {
+        if (!$this->isServingEnabled()) {
+            return $proceed($withEmpty, $defaultValues); // master switch off: native behaviour
+        }
         $attributeId = $this->attributeId($subject);
         if ($attributeId <= 0) {
             return $proceed($withEmpty, $defaultValues);
@@ -53,6 +58,9 @@ class SourceOptionPlugin
      */
     public function aroundGetOptionText(Table $subject, callable $proceed, $value)
     {
+        if (!$this->isServingEnabled()) {
+            return $proceed($value); // master switch off: native behaviour
+        }
         // Multi-value (multiselect): resolve each id from the dictionary and return the label array
         // (native returns an array here). Any unresolved id fall back to native for the whole set.
         if (is_array($value) || (is_string($value) && strpos($value, ',') !== false)) {

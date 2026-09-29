@@ -44,6 +44,8 @@ use Psr\Log\LoggerInterface;
  */
 class CategoryWidgetServer
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     public const XML_PATH_ENABLED = 'fastmagento/serving/serve_widget_collections';
     public const XML_PATH_IDS_SOURCE = 'fastmagento/serving/widget_ids_source';
     public const IDS_FROM_SQL = 'sql';
@@ -81,7 +83,8 @@ class CategoryWidgetServer
 
     public function isEnabled(): bool
     {
-        return $this->scopeConfig->isSetFlag(self::XML_PATH_ENABLED, ScopeInterface::SCOPE_STORE)
+        return $this->isServingEnabled()
+            && $this->scopeConfig->isSetFlag(self::XML_PATH_ENABLED, ScopeInterface::SCOPE_STORE)
             && $this->hydrator->isEnabled();
     }
 

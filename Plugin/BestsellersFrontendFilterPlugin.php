@@ -23,6 +23,8 @@ use ParkkTech\FastMagento\Helper\WriteLog;
  */
 class BestsellersFrontendFilterPlugin
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     public function __construct(
         private readonly ParentIdResolver $parentIdResolver,
         private readonly WriteLog $writeLog
@@ -36,6 +38,9 @@ class BestsellersFrontendFilterPlugin
      */
     public function afterLoad(Collection $subject, $result)
     {
+        if (!$this->isServingEnabled()) {
+            return $result; // master switch off: native behaviour
+        }
         // Re-entry guard: this report collection re-enters load() from getItems(), so
         // without the flag the filter recurses infinitely.
         if ($subject->getFlag('fm_bestsellers_filtered')) {

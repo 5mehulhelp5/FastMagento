@@ -13,6 +13,8 @@ use ParkkTech\FastMagento\Model\ShellProduct\ShellNoEavProduct;
 
 class FrontendProductPlugin
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     /**
      * @param WriteLog $writeLog
      * @param State $appState
@@ -43,6 +45,9 @@ class FrontendProductPlugin
      */
     public function aroundLoad(Product $subject, callable $proceed, $modelId, $field = null)
     {
+        if (!$this->isServingEnabled()) {
+            return $proceed($modelId, $field); // master switch off: native load, no warm-on-miss
+        }
         // Only modify product model in the frontend scope
         if ($this->appState->getAreaCode() === 'frontend') {
             if (null != $field) {

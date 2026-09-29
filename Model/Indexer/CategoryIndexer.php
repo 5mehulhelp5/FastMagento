@@ -77,11 +77,15 @@ class CategoryIndexer implements ActionInterface, MviewActionInterface
         private readonly ScopeConfigInterface $scopeConfig,
         // Optional-with-fallback so an existing install's compiled DI survives the upgrade
         // that introduces it.
-        private ?\ParkkTech\FastMagento\Model\OpenSearch\IndexSettings $indexSettings = null
+        private ?\ParkkTech\FastMagento\Model\OpenSearch\IndexSettings $indexSettings = null,
+        private ?\ParkkTech\FastMagento\Model\OpenSearch\IndexSwapper $indexSwapper = null
     ) {
         $this->indexSettings = $indexSettings
             ?? \Magento\Framework\App\ObjectManager::getInstance()
                 ->get(\ParkkTech\FastMagento\Model\OpenSearch\IndexSettings::class);
+        $this->indexSwapper = $indexSwapper
+            ?? \Magento\Framework\App\ObjectManager::getInstance()
+                ->get(\ParkkTech\FastMagento\Model\OpenSearch\IndexSwapper::class);
     }
 
     /** Cached category url suffix for the index store (e.g. ".html"). */
@@ -105,17 +109,30 @@ class CategoryIndexer implements ActionInterface, MviewActionInterface
      */
     public function executeFull(): void
     {
-        $indexName = $this->getIndexName();
-        $client = $this->getSearchClient();
+        // Blue/green: fill a fresh versioned index while the storefront keeps reading the current
+        // one, then move the alias atomically (see IndexSwapper). execute() logs and swallows its
+        // own errors, so a failed fill is detected by its flag and aborts the swap.
         try {
-            if ($client->indexExists($indexName)) {
-                $client->deleteIndex($indexName);
-            }
-            $client->createIndex($indexName, $this->buildMapping());
+            $this->indexSwapper->rebuild(
+                $this->getSearchClient(),
+                $this->getIndexName(),
+                $this->buildMapping(),
+                function (string $target): void {
+                    $this->writeIndex = $target;
+                    $this->runFailed = false;
+                    try {
+                        $this->execute([]);
+                    } finally {
+                        $this->writeIndex = null;
+                    }
+                    if ($this->runFailed) {
+                        throw new \RuntimeException('category index fill failed; keeping the current index');
+                    }
+                }
+            );
         } catch (\Throwable $e) {
-            $this->writeLog->writeErrorLog('[FastMagento] category index (re)create failed: ' . $e->getMessage());
+            $this->writeLog->writeErrorLog('[FastMagento] category index rebuild failed: ' . $e->getMessage());
         }
-        $this->execute([]);
     }
 
     /**
@@ -125,7 +142,7 @@ class CategoryIndexer implements ActionInterface, MviewActionInterface
     {
         try {
             $storeId = $this->getIndexStoreId();
-            $indexName = $this->getIndexName();
+            $indexName = $this->getWriteIndexName();
             $client = $this->getSearchClient();
 
             $collection = $this->categoryCollectionFactory->create();
@@ -152,6 +169,7 @@ class CategoryIndexer implements ActionInterface, MviewActionInterface
                 $this->bulkIndexNDJSON($client, $indexName, $docs);
             }
         } catch (\Throwable $e) {
+            $this->runFailed = true;
             $this->writeLog->writeErrorLog('[FastMagento] category execute error: ' . $e->getMessage());
         }
     }
@@ -301,6 +319,25 @@ class CategoryIndexer implements ActionInterface, MviewActionInterface
     public function getIndexName(): string
     {
         return $this->openSearchConfig->getCategoryIndexName();
+    }
+
+    /**
+     * Set only while executeFull() fills a new versioned index.
+     */
+    private ?string $writeIndex = null;
+
+    /**
+     * Set by execute() when it swallowed an error, so a full rebuild does not swap in a partial index.
+     */
+    private bool $runFailed = false;
+
+    /**
+     * Index that writes go to: the versioned index being built during a full rebuild, otherwise
+     * the alias every reader uses.
+     */
+    private function getWriteIndexName(): string
+    {
+        return $this->writeIndex ?? $this->getIndexName();
     }
 
     /**

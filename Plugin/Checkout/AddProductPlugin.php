@@ -11,8 +11,13 @@ use Magento\ConfigurableProduct\Model\Product\Type\Configurable;
 
 class AddProductPlugin
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     public function beforeAddProduct(Cart $subject, $productInfo, $requestInfo = null)
     {
+        if (!$this->isServingEnabled()) {
+            return null; // master switch off: native behaviour
+        }
         /** @var Product $product */
         $product = $productInfo;
 

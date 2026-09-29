@@ -191,6 +191,9 @@
                 type="ParkkTech\FastMagento\Model\ResourceModel\Product\Type\Configurable\Attribute\Collection"/>
     <type name="Magento\Catalog\Model\Product">
         <plugin name="catalogInventoryAfterLoad" disabled="true"/>
+        <!-- ...but run it again whenever the serving master switch is off (natively loaded products). -->
+        <plugin name="fastmagento_gated_catalog_inventory_after_load"
+                type="ParkkTech\FastMagento\Plugin\Inventory\GatedAfterProductLoadPlugin"/>
     </type>
 
     <type name="Magento\Checkout\Model\Cart">

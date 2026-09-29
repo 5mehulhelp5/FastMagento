@@ -25,6 +25,8 @@ use Magento\Catalog\Helper\Product\View as CatalogProductView;
  */
 class View extends MagentoView
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     /**
      * The parent's logger is private; keep our own reference for the render error path.
      */
@@ -77,6 +79,10 @@ class View extends MagentoView
      */
     public function execute()
     {
+        if (!$this->isServingEnabled()) {
+            return parent::execute(); // master switch off: core product controller, unchanged
+        }
+
         $request = $this->getRequest();
         $productId = (int)$request->getParam('id');
         if (!$productId) {

@@ -26,6 +26,8 @@ use Magento\Msrp\Model\Msrp;
  */
 class CanApplyToProductPlugin
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     /** @var string[]|null */
     private ?array $applyTo = null;
 
@@ -41,6 +43,9 @@ class CanApplyToProductPlugin
      */
     public function aroundCanApplyToProduct(Msrp $subject, callable $proceed, $product)
     {
+        if (!$this->isServingEnabled()) {
+            return $proceed($product); // master switch off: native behaviour
+        }
         try {
             if ($this->applyTo === null) {
                 $attribute = $this->eavConfig->getAttribute(Product::ENTITY, 'msrp');

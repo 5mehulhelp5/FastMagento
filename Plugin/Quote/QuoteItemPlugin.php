@@ -10,8 +10,13 @@ use ParkkTech\FastMagento\Model\ShellProduct\ShellNoEavProduct;
 
 class QuoteItemPlugin
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     public function afterGetProduct(QuoteItem $subject, $product)
     {
+        if (!$this->isServingEnabled()) {
+            return $product; // master switch off: native behaviour
+        }
         // If product already has custom price injected, skip
         if ($product->getCustomPrice()) {
             return $product;

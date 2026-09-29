@@ -63,6 +63,8 @@ use ParkkTech\FastMagento\Model\Search\InstantSearch;
  */
 class SearchOsHydrationPlugin
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     private const XML_PATH_OS_SERVE = 'fastmagento/graphql/os_serve_search';
 
     private const REQUEST_NAME_SEARCH = 'graphql_product_search';
@@ -98,6 +100,9 @@ class SearchOsHydrationPlugin
      */
     public function aroundSearch(SearchInterface $subject, callable $proceed, SearchCriteriaInterface $searchCriteria)
     {
+        if (!$this->isServingEnabled()) {
+            return $proceed($searchCriteria); // master switch off: native behaviour
+        }
         try {
             if ($this->appState->getAreaCode() !== Area::AREA_GRAPHQL
                 || !$this->scopeConfig->isSetFlag(self::XML_PATH_OS_SERVE, ScopeInterface::SCOPE_STORE)

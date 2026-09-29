@@ -24,6 +24,8 @@ use Magento\Store\Model\ScopeInterface;
  */
 class ApplyInstantSearchLayout implements ObserverInterface
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     public const XML_PATH_ENABLED = 'fastmagento/search/instant_search_enabled';
 
     /**
@@ -55,7 +57,9 @@ class ApplyInstantSearchLayout implements ObserverInterface
 
     public function execute(Observer $observer): void
     {
-        if (!$this->scopeConfig->isSetFlag(self::XML_PATH_ENABLED, ScopeInterface::SCOPE_STORE)) {
+        if (!$this->isServingEnabled()
+            || !$this->scopeConfig->isSetFlag(self::XML_PATH_ENABLED, ScopeInterface::SCOPE_STORE)
+        ) {
             return;
         }
 

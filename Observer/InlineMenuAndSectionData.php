@@ -32,6 +32,8 @@ use Psr\Log\LoggerInterface;
  */
 class InlineMenuAndSectionData implements ObserverInterface
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     public const XML_PATH_INLINE_MENU = 'fastmagento/serving/inline_menu';
     public const XML_PATH_INLINE_MENU_BLOCKS = 'fastmagento/serving/inline_menu_blocks';
     public const XML_PATH_CACHE_SECTION_DATA = 'fastmagento/serving/cache_section_data';
@@ -48,6 +50,9 @@ class InlineMenuAndSectionData implements ObserverInterface
 
     public function execute(Observer $observer): void
     {
+        if (!$this->isServingEnabled()) {
+            return; // master switch off: native behaviour
+        }
         try {
             $layout = $observer->getEvent()->getLayout();
             if (!$layout) {

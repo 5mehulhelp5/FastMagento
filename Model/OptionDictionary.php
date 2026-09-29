@@ -28,6 +28,8 @@ use Psr\Log\LoggerInterface;
  */
 class OptionDictionary
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     /** @var array<int,array<int,array{value:string,label:string}>> per-request cache: attrId => options */
     private array $cache = [];
 
@@ -53,6 +55,9 @@ class OptionDictionary
     /** Whether the dictionary should be consulted at all (master switch, default on). */
     public function isEnabled(): bool
     {
+        if (!$this->isServingEnabled()) {
+            return false;
+        }
         $v = $this->scopeConfig->getValue('fastmagento/indexing/serve_option_labels');
         return $v === null ? true : (bool) $v;
     }

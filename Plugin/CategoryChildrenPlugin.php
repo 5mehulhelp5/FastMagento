@@ -31,6 +31,8 @@ use ParkkTech\FastMagento\Model\OpenSearch\CategoryModelBuilder;
  */
 class CategoryChildrenPlugin
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     private const XML_PATH_SERVE_TREE = 'fastmagento/serving/serve_category_tree';
 
     /** @var array<int, mixed> spl_object_id($category) => children collection */
@@ -174,6 +176,9 @@ class CategoryChildrenPlugin
      */
     public function aroundGetChildrenCategories(Category $subject, callable $proceed)
     {
+        if (!$this->isServingEnabled()) {
+            return $proceed(); // master switch off: native behaviour
+        }
         $key = spl_object_id($subject);
         if (!array_key_exists($key, $this->children)) {
             $this->children[$key] = $this->indexedChildrenCollection($subject) ?? $proceed();
@@ -222,6 +227,9 @@ class CategoryChildrenPlugin
      */
     public function aroundHasChildren(Category $subject, callable $proceed): bool
     {
+        if (!$this->isServingEnabled()) {
+            return $proceed(); // master switch off: native behaviour
+        }
         $key = spl_object_id($subject);
         if (!array_key_exists($key, $this->hasChildren)) {
             $count = $this->indexedDescendantCount($subject);

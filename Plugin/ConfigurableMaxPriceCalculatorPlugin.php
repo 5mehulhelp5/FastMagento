@@ -27,6 +27,8 @@ use Magento\Framework\Registry;
  */
 class ConfigurableMaxPriceCalculatorPlugin
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     public function __construct(private readonly Registry $registry)
     {
     }
@@ -41,6 +43,9 @@ class ConfigurableMaxPriceCalculatorPlugin
         callable $proceed,
         $productId
     ) {
+        if (!$this->isServingEnabled()) {
+            return $proceed($productId); // master switch off: native behaviour
+        }
         $shells = $this->registry->registry('child_products_' . (int) $productId);
         if (!is_array($shells) || !$shells) {
             return $proceed($productId);

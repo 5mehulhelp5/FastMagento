@@ -17,6 +17,8 @@ use ParkkTech\FastMagento\Model\Search\InstantSearch;
  */
 class Instant extends Action
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     public function __construct(
         Context $context,
         private readonly JsonFactory $jsonFactory,
@@ -31,6 +33,11 @@ class Instant extends Action
 
     public function execute()
     {
+        if (!$this->isServingEnabled()) {
+            // Master switch off: this endpoint doesn't exist in stock Magento.
+            return $this->resultFactory->create(\Magento\Framework\Controller\ResultFactory::TYPE_FORWARD)
+                ->forward('noroute');
+        }
         $request = $this->getRequest();
         $query = (string) $request->getParam('q', '');
         $page = (int) $request->getParam('p', 1);

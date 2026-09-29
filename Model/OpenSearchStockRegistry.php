@@ -23,6 +23,8 @@ use Magento\GroupedProduct\Model\Product\Type\Grouped;
 
 class OpenSearchStockRegistry implements StockRegistryInterface
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     /** @var StockStatusInterfaceFactory */
     private $stockStatusFactory;
 
@@ -68,6 +70,9 @@ class OpenSearchStockRegistry implements StockRegistryInterface
 
     public function getStockItem($productId, $scopeId = null): StockItemInterface
     {
+        if (!$this->isServingEnabled()) {
+            return $this->stockRegistryProvider->getStockItem($productId, $this->stockConfiguration->getDefaultScopeId()); // master switch off: core behaviour (core always uses the default scope)
+        }
         // Check if product exists in registry
         $product = $this->registry->registry('current_product');
 
@@ -87,6 +92,9 @@ class OpenSearchStockRegistry implements StockRegistryInterface
 
     public function getStockStatus($productId, $scopeId = null): StockStatusInterface
     {
+        if (!$this->isServingEnabled()) {
+            return $this->stockRegistryProvider->getStockStatus($productId, $this->stockConfiguration->getDefaultScopeId()); // master switch off: core behaviour (core always uses the default scope)
+        }
         $product = $this->registry->registry('current_product');
 
         if ($product && (int)$product->getId() === (int)$productId) {

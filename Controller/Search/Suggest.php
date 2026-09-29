@@ -18,6 +18,8 @@ use ParkkTech\FastMagento\Model\Search\InstantSearch;
  */
 class Suggest extends Action
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     private const PRODUCT_LIMIT = 6;
     private const CATEGORY_LIMIT = 5;
 
@@ -32,6 +34,11 @@ class Suggest extends Action
 
     public function execute()
     {
+        if (!$this->isServingEnabled()) {
+            // Master switch off: this endpoint doesn't exist in stock Magento.
+            return $this->resultFactory->create(\Magento\Framework\Controller\ResultFactory::TYPE_FORWARD)
+                ->forward('noroute');
+        }
         $query = (string) $this->getRequest()->getParam('q', '');
         $result = $this->instantSearch->search($query, 1, self::PRODUCT_LIMIT, [], true);
 

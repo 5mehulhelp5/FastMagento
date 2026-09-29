@@ -29,6 +29,8 @@ use Psr\Log\LoggerInterface;
  */
 class ReviewListFromIndexPlugin
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     public const XML_PATH_ENABLED = 'fastmagento/serving/serve_reviews';
 
     private const FLAG_SERVED = 'fastmagento_review_served';
@@ -125,6 +127,9 @@ class ReviewListFromIndexPlugin
 
     private function isEligible(Collection $subject): bool
     {
+        if (!$this->isServingEnabled()) {
+            return false; // master switch off: native behaviour
+        }
         try {
             if (!$this->scopeConfig->isSetFlag(self::XML_PATH_ENABLED, ScopeInterface::SCOPE_STORE)) {
                 return false;

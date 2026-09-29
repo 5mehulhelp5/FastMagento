@@ -83,7 +83,8 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
         private ProductRepositoryInterface $productRepository,
         private readonly EntityLink $entityLink,
         private ?\Magento\Framework\Stdlib\DateTime\TimezoneInterface $localeDate = null,
-        private ?\ParkkTech\FastMagento\Model\OpenSearch\IndexSettings $indexSettings = null
+        private ?\ParkkTech\FastMagento\Model\OpenSearch\IndexSettings $indexSettings = null,
+        private ?\ParkkTech\FastMagento\Model\OpenSearch\IndexSwapper $indexSwapper = null
     ) {
         $this->localeDate = $localeDate
             ?? \Magento\Framework\App\ObjectManager::getInstance()
@@ -93,6 +94,9 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
         $this->indexSettings = $indexSettings
             ?? \Magento\Framework\App\ObjectManager::getInstance()
                 ->get(\ParkkTech\FastMagento\Model\OpenSearch\IndexSettings::class);
+        $this->indexSwapper = $indexSwapper
+            ?? \Magento\Framework\App\ObjectManager::getInstance()
+                ->get(\ParkkTech\FastMagento\Model\OpenSearch\IndexSwapper::class);
         $this->clientResolver = $clientResolver;
         $this->engineResolver = $engineResolver;
         $this->productCollectionFactory = $productCollectionFactory;
@@ -147,7 +151,7 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
                 'body' => $productData
             ];
 
-            $indexName = $this->getIndexName();
+            $indexName = $this->getWriteIndexName();
             $client = $this->getSearchClient();
 
             $this->bulkIndexNDJSON($client, $indexName, [$doc]);
@@ -180,7 +184,7 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
      */
     private function executePerProduct($ids): void
     {
-        $indexName = $this->getIndexName();
+        $indexName = $this->getWriteIndexName();
         $client = $this->getSearchClient();
         $storeId = $this->getIndexStoreId();
 
@@ -268,7 +272,7 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
             $body = $this->setExtensionAttributes($body);
             $this->bulkIndexNDJSON(
                 $this->getSearchClient(),
-                $this->getIndexName(),
+                $this->getWriteIndexName(),
                 [['id' => (string)$product->getId(), 'body' => $body]]
             );
         } catch (\Throwable $e) {
@@ -328,14 +332,21 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
 
     public function executeFull()
     {
-        $indexName = $this->getIndexName();
-        $client = $this->getSearchClient();
-        if ($client->indexExists($indexName)) {
-            $client->deleteIndex($indexName);
-        }
-        $client->createIndex($indexName, $this->buildDynamicMapping());
-
-        $this->execute([]);
+        // Blue/green: fill a fresh versioned index while the storefront keeps reading the current
+        // one, then move the alias atomically (see IndexSwapper).
+        $this->indexSwapper->rebuild(
+            $this->getSearchClient(),
+            $this->getIndexName(),
+            $this->buildDynamicMapping(),
+            function (string $target): void {
+                $this->writeIndex = $target;
+                try {
+                    $this->execute([]);
+                } finally {
+                    $this->writeIndex = null;
+                }
+            }
+        );
     }
 
     public function executeList(array $ids)
@@ -359,6 +370,11 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
     private ?array $batchCtx = null;
 
     /**
+     * Set only while executeFull() fills a new versioned index.
+     */
+    private ?string $writeIndex = null;
+
+    /**
      * Fast, deterministic reindex (the default heavy path). Loads products SET-BASED per chunk via
      * a product collection instead of one productRepository->getById() per product, then builds a
      * doc whose contents are EXPLICITLY defined by this indexer — not incidentally by whichever
@@ -380,7 +396,7 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
         if (!$ids) {
             return;
         }
-        $indexName = $this->getIndexName();
+        $indexName = $this->getWriteIndexName();
         $client = $this->getSearchClient();
         $storeId = $this->getIndexStoreId();
 
@@ -1052,6 +1068,15 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
     }
 
     /**
+     * Index that writes go to: the versioned index being built during a full rebuild, otherwise
+     * the alias every reader uses.
+     */
+    private function getWriteIndexName(): string
+    {
+        return $this->writeIndex ?? $this->getIndexName();
+    }
+
+    /**
      * @param $client
      * @param string $indexName
      * @param array $docs
@@ -1076,7 +1101,7 @@ class ProductIndexer implements ActionInterface, MviewActionInterface
     {
         try {
             $this->getSearchClient()->getOpenSearchClient()->indices()->refresh(
-                ['index' => $this->getIndexName()]
+                ['index' => $this->getWriteIndexName()]
             );
         } catch (\Throwable $e) {
             // A missed refresh only costs a second of search staleness; never surface it.

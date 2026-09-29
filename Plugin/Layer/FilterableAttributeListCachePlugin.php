@@ -28,6 +28,8 @@ use Psr\Log\LoggerInterface;
  */
 class FilterableAttributeListCachePlugin
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     public const XML_PATH_ENABLED = 'fastmagento/serving/cache_filterable_attributes';
     private const CACHE_KEY = 'FASTMAGENTO_FILTERABLE_ATTRIBUTES_';
     private const LIFETIME = 86400;
@@ -47,6 +49,9 @@ class FilterableAttributeListCachePlugin
 
     public function aroundGetList(FilterableAttributeList $subject, callable $proceed)
     {
+        if (!$this->isServingEnabled()) {
+            return $proceed(); // master switch off: native behaviour
+        }
         if (!$this->scopeConfig->isSetFlag(self::XML_PATH_ENABLED, ScopeInterface::SCOPE_STORE)) {
             return $proceed();
         }

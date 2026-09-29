@@ -31,6 +31,8 @@ use Magento\Framework\File\UploaderFactory;
 
 class Configurable extends CoreConfigurable
 {
+    use \ParkkTech\FastMagento\Model\ServingGateAware;
+
     private Registry $registry;
 
     public function __construct(
@@ -99,6 +101,9 @@ class Configurable extends CoreConfigurable
      */
     public function getConfigurableAttributes($product)
     {
+        if (!$this->isServingEnabled()) {
+            return parent::getConfigurableAttributes($product);
+        }
         $registryKey = 'configurable_options_' . $product->getId();
 
         // Check if data is in registry
@@ -129,6 +134,9 @@ class Configurable extends CoreConfigurable
      */
     public function isSalable($product)
     {
+        if (!$this->isServingEnabled()) {
+            return parent::isSalable($product);
+        }
         if ($product->hasData('is_salable')) {
             return (bool) $product->getData('is_salable')
                 && (int) $product->getStatus() === \Magento\Catalog\Model\Product\Attribute\Source\Status::STATUS_ENABLED;
@@ -152,6 +160,9 @@ class Configurable extends CoreConfigurable
      */
     public function getProductByAttributes($attributesInfo, $product)
     {
+        if (!$this->isServingEnabled()) {
+            return parent::getProductByAttributes($attributesInfo, $product);
+        }
         $hasChildren = $this->resolveRegisteredChildren($product) !== null;
         if (is_array($attributesInfo) && !empty($attributesInfo) && $hasChildren) {
             $codeByAttributeId = [];
@@ -186,6 +197,9 @@ class Configurable extends CoreConfigurable
      */
     public function getUsedProducts($configurableProduct, $requiredAttributeIds = null)
     {
+        if (!$this->isServingEnabled()) {
+            return parent::getUsedProducts($configurableProduct, $requiredAttributeIds);
+        }
         $perIdKey = 'child_products_' . (int) $configurableProduct->getId();
         $registered = $this->resolveRegisteredChildren($configurableProduct);
         if ($registered !== null) {
